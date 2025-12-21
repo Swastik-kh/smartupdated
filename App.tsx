@@ -230,7 +230,7 @@ const App: React.FC = () => {
         const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
         const orgPath = `orgData/${safeOrgName}`;
         
-        // 1. Fetch current version to check previous status
+        // 1. Security Check: Prevent double deduction
         const currentReportSnap = await get(ref(db, `${orgPath}/issueReports/${report.id}`));
         const prevStatus = currentReportSnap.exists() ? currentReportSnap.val().status : null;
         
@@ -242,15 +242,14 @@ const App: React.FC = () => {
             const inventory: Record<string, InventoryItem> = invSnap.exists() ? invSnap.val() : {};
             const inventoryKeys = Object.keys(inventory);
 
-            // Fetch the linked Mag Form to update its remarks as well
             const magFormSnap = await get(ref(db, `${orgPath}/magForms/${report.magFormId}`));
             let linkedMagForm: MagFormEntry | null = magFormSnap.exists() ? magFormSnap.val() : null;
 
             const updatedReportItems = report.items.map(rptItem => {
                 let remainingToIssue = Number(rptItem.quantity) || 0;
                 let usedBatches: string[] = [];
+                let firstMatchedCode = ''; // Track item code for Non-Expendable tracking
 
-                // FEFO: Find and sort inventory items
                 const matchingInventoryItems = inventoryKeys
                     .map(key => ({ key, data: inventory[key] }))
                     .filter(item => 
@@ -275,6 +274,11 @@ const App: React.FC = () => {
                     const newQty = availableQty - takeQty;
                     remainingToIssue -= takeQty;
 
+                    // Capture identification for Non-Expendable ledger
+                    if (!firstMatchedCode) {
+                        firstMatchedCode = invItem.uniqueCode || invItem.sanketNo || '';
+                    }
+
                     if (invItem.batchNo) {
                         usedBatches.push(`B:${invItem.batchNo}(${takeQty}${invItem.unit})`);
                     }
@@ -291,28 +295,28 @@ const App: React.FC = () => {
                     };
                 }
 
-                if (usedBatches.length > 0) {
-                    const batchInfo = usedBatches.join(', ');
-                    const newRemarks = rptItem.remarks ? `${rptItem.remarks} [Batch: ${batchInfo}]` : `[Batch: ${batchInfo}]`;
-                    
-                    // Update linked Mag Form's item remarks if form exists
-                    if (linkedMagForm) {
-                        linkedMagForm.items = linkedMagForm.items.map(mItem => {
-                            if (mItem.name.trim().toLowerCase() === rptItem.name.trim().toLowerCase()) {
-                                return { ...mItem, remarks: newRemarks };
-                            }
-                            return mItem;
-                        });
-                    }
-
-                    return { ...rptItem, remarks: newRemarks };
+                const batchSuffix = usedBatches.length > 0 ? ` [Batch: ${usedBatches.join(', ')}]` : '';
+                const newRemarks = rptItem.remarks ? `${rptItem.remarks}${batchSuffix}` : batchSuffix.trim();
+                
+                // Update linked Mag Form's item remarks for traceability
+                if (linkedMagForm) {
+                    linkedMagForm.items = linkedMagForm.items.map(mItem => {
+                        if (mItem.name.trim().toLowerCase() === rptItem.name.trim().toLowerCase()) {
+                            return { ...mItem, remarks: newRemarks };
+                        }
+                        return mItem;
+                    });
                 }
-                return rptItem;
+
+                return { 
+                    ...rptItem, 
+                    remarks: newRemarks,
+                    codeNo: firstMatchedCode || rptItem.codeNo // Save the code persistently for Sahayak Jinshi Khata
+                };
             });
 
             report.items = updatedReportItems;
 
-            // Save the updated Mag Form with batch info in remarks
             if (linkedMagForm) {
                 updates[`${orgPath}/magForms/${report.magFormId}`] = linkedMagForm;
             }
