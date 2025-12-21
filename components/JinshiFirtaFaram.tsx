@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { RotateCcw, Plus, Printer, Save, ArrowLeft, Clock, Eye, ShieldCheck } from 'lucide-react';
+import { RotateCcw, Plus, Printer, ArrowLeft, Clock, Eye, ShieldCheck } from 'lucide-react';
 import { InventoryItem, User, ReturnEntry, ReturnItem, IssueReportEntry, OrganizationSettings, Option } from '../types';
 import { SearchableSelect } from './SearchableSelect';
 import { NepaliDatePicker } from './NepaliDatePicker';
@@ -30,7 +30,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const [isViewOnly, setIsViewOnly] = useState(false);
 
-  // आजको मिति मात्र (Restriction for Calendar)
   const todayBS = useMemo(() => {
     try {
       return new NepaliDate().format('YYYY-MM-DD');
@@ -115,7 +114,7 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
         .map(asset => ({
             id: `${asset.issueNo}-${asset.codeNo}-${asset.issuedTo}`,
             value: asset.name,
-            label: `${asset.name} (${asset.codeNo}) - [जिम्मा: ${asset.issuedTo}] - बाँकी: ${asset.quantity} ${asset.unit}`,
+            label: `${asset.name} (${asset.codeNo}) - [जिम्मा: ${asset.issuedTo}]`,
             itemData: { ...asset, remaining: asset.quantity }
         })) as Option[];
   }, [issueReports, returnEntries, inventoryItems]);
@@ -176,9 +175,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
           }
           return item;
       }));
-      if (!formDetails.returnedBy.name || formDetails.returnedBy.name === currentUser.fullName) {
-          setFormDetails(prev => ({ ...prev, returnedBy: { ...prev.returnedBy, name: data.issuedTo } }));
-      }
   };
 
   const handleSave = (statusToSet: 'Pending' | 'Approved' = 'Pending') => {
@@ -344,7 +340,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
              </div>
         </div>
 
-        {/* मिति समायोजन - एउटा मात्र स्पष्ट स्थानमा */}
         <div className="flex justify-between items-end mb-6">
             <div className="w-1/2 space-y-2">
                 <div className="flex items-center gap-2">
@@ -367,8 +362,8 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
                       inputClassName="border-b border-dotted w-32 inline-block p-0 h-auto font-bold text-right" 
                       disabled={isViewOnly} 
                       popupAlign="right"
-                      minDate={todayBS} // आजको मिति मात्र छनोट गर्न मिल्ने
-                      maxDate={todayBS} // आजको मिति मात्र छनोट गर्न मिल्ने
+                      minDate={todayBS} 
+                      maxDate={todayBS} 
                     />
                 </div>
                 <div className="flex items-center justify-end gap-2">
@@ -382,7 +377,7 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
             <thead>
                 <tr className="bg-slate-50 font-bold">
                     <th className="border border-slate-900 p-2 w-10">क्र.सं.</th>
-                    <th className="border border-slate-900 p-2">सामानको नाम</th>
+                    <th className="border border-slate-900 p-2">विवरण (सामानको नाम)</th>
                     <th className="border border-slate-900 p-2 w-24">सङ्केत नं.</th>
                     <th className="border border-slate-900 p-2 w-16">एकाई</th>
                     <th className="border border-slate-900 p-2 w-16">परिमाण</th>
@@ -415,7 +410,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
                         <td className="border border-slate-900 p-1"><input type="number" value={item.rate || ''} onChange={e => updateItem(item.id, 'rate', e.target.value)} disabled={isViewOnly} className="w-full bg-transparent text-right outline-none" /></td>
                         <td className="border border-slate-900 p-1 text-right px-2">{item.totalAmount.toFixed(2)}</td>
                         <td className="border border-slate-900 p-1">
-                            {/* सामानको अवस्था - Dropdown (चालू / बिग्रेको) */}
                             <select 
                                 value={item.condition} 
                                 onChange={e => updateItem(item.id, 'condition', e.target.value)} 
