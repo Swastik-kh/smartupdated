@@ -147,6 +147,58 @@ const App: React.FC = () => {
       return ref(db, `orgData/${safeOrgName}/${subPath}`);
   };
 
+  const handleSaveReturnEntry = async (entry: ReturnEntry) => {
+    if (!currentUser) return;
+    try {
+        const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
+        const orgPath = `orgData/${safeOrgName}`;
+        
+        // 1. Get previous state to check for transition to 'Approved'
+        const existingSnap = await get(ref(db, `${orgPath}/returnEntries/${entry.id}`));
+        const prevStatus = existingSnap.exists() ? existingSnap.val().status : null;
+        
+        const updates: Record<string, any> = {};
+
+        // 2. Logic to add stock if status is newly 'Approved'
+        if (entry.status === 'Approved' && prevStatus !== 'Approved') {
+            const invSnap = await get(ref(db, `${orgPath}/inventory`));
+            const inventory: Record<string, InventoryItem> = invSnap.exists() ? invSnap.val() : {};
+            const invList = Object.keys(inventory).map(k => ({ ...inventory[k], id: k }));
+
+            for (const retItem of entry.items) {
+                // Find matching item in inventory
+                // We match by name and potentially code/sanket if provided
+                const matchingItem = invList.find(i => 
+                    i.itemName.trim().toLowerCase() === retItem.name.trim().toLowerCase()
+                );
+
+                if (matchingItem) {
+                    const currentQty = Number(matchingItem.currentQuantity) || 0;
+                    const returnQty = Number(retItem.quantity) || 0;
+                    const newQty = currentQty + returnQty;
+                    
+                    const rate = Number(matchingItem.rate) || 0;
+                    const tax = Number(matchingItem.tax) || 0;
+                    const newTotal = newQty * rate * (1 + tax / 100);
+
+                    updates[`${orgPath}/inventory/${matchingItem.id}`] = {
+                        ...matchingItem,
+                        currentQuantity: newQty,
+                        totalAmount: newTotal,
+                        lastUpdateDateBs: entry.date,
+                    };
+                }
+            }
+        }
+
+        updates[`${orgPath}/returnEntries/${entry.id}`] = entry;
+        await update(ref(db), updates);
+    } catch (error) {
+        console.error("Error approving return and updating stock:", error);
+        alert("फिर्ता स्वीकृत गर्दा स्टक अपडेट गर्न समस्या आयो।");
+    }
+  };
+
   const filteredUsersForDashboard = allUsers.filter(u => {
       if (currentUser?.role === 'SUPER_ADMIN') return true;
       return u.organizationName === currentUser?.organizationName;
@@ -230,13 +282,11 @@ const App: React.FC = () => {
         const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
         const orgPath = `orgData/${safeOrgName}`;
         
-        // 1. Security Check: Prevent double deduction
         const currentReportSnap = await get(ref(db, `${orgPath}/issueReports/${report.id}`));
         const prevStatus = currentReportSnap.exists() ? currentReportSnap.val().status : null;
         
         const updates: Record<string, any> = {};
 
-        // 2. Logic to deduct stock ONLY if status is transitioning TO 'Issued'
         if (report.status === 'Issued' && prevStatus !== 'Issued' && report.storeId) {
             const invSnap = await get(ref(db, `${orgPath}/inventory`));
             const inventory: Record<string, InventoryItem> = invSnap.exists() ? invSnap.val() : {};
@@ -248,7 +298,7 @@ const App: React.FC = () => {
             const updatedReportItems = report.items.map(rptItem => {
                 let remainingToIssue = Number(rptItem.quantity) || 0;
                 let usedBatches: string[] = [];
-                let firstMatchedCode = ''; // Track item code for Non-Expendable tracking
+                let firstMatchedCode = ''; 
 
                 const matchingInventoryItems = inventoryKeys
                     .map(key => ({ key, data: inventory[key] }))
@@ -259,7 +309,6 @@ const App: React.FC = () => {
                         item.data.currentQuantity > 0
                     );
 
-                // FEFO Sort: Near Expiry Date first
                 matchingInventoryItems.sort((a, b) => {
                     const dateA = a.data.expiryDateAd ? new Date(a.data.expiryDateAd).getTime() : Infinity;
                     const dateB = b.data.expiryDateAd ? new Date(b.data.expiryDateAd).getTime() : Infinity;
@@ -274,7 +323,6 @@ const App: React.FC = () => {
                     const newQty = availableQty - takeQty;
                     remainingToIssue -= takeQty;
 
-                    // Capture identification for Non-Expendable ledger
                     if (!firstMatchedCode) {
                         firstMatchedCode = invItem.uniqueCode || invItem.sanketNo || '';
                     }
@@ -298,7 +346,6 @@ const App: React.FC = () => {
                 const batchSuffix = usedBatches.length > 0 ? ` [Batch: ${usedBatches.join(', ')}]` : '';
                 const newRemarks = rptItem.remarks ? `${rptItem.remarks}${batchSuffix}` : batchSuffix.trim();
                 
-                // Update linked Mag Form's item remarks for traceability
                 if (linkedMagForm) {
                     linkedMagForm.items = linkedMagForm.items.map(mItem => {
                         if (mItem.name.trim().toLowerCase() === rptItem.name.trim().toLowerCase()) {
@@ -311,7 +358,7 @@ const App: React.FC = () => {
                 return { 
                     ...rptItem, 
                     remarks: newRemarks,
-                    codeNo: firstMatchedCode || rptItem.codeNo // Save the code persistently for Sahayak Jinshi Khata
+                    codeNo: firstMatchedCode || rptItem.codeNo 
                 };
             });
 
@@ -322,11 +369,10 @@ const App: React.FC = () => {
             }
         }
 
-        // 3. Final Update to Database
         updates[`${orgPath}/issueReports/${report.id}`] = report;
         await update(ref(db), updates);
     } catch (error) {
-        console.error("Error issuing report with FEFO and audit trail:", error);
+        console.error("Error issuing report:", error);
         alert("निकासा गर्दा स्टक र माग फारम अपडेट गर्न समस्या आयो।");
     }
   };
@@ -473,7 +519,7 @@ const App: React.FC = () => {
           dakhilaReports={dakhilaReports}
           onSaveDakhilaReport={(r) => set(getOrgRef(`dakhilaReports/${r.id}`), r)}
           returnEntries={returnEntries}
-          onSaveReturnEntry={(e) => set(getOrgRef(`returnEntries/${e.id}`), e)}
+          onSaveReturnEntry={handleSaveReturnEntry}
           marmatEntries={marmatEntries}
           onSaveMarmatEntry={(e) => set(getOrgRef(`marmatEntries/${e.id}`), e)}
           dhuliyaunaEntries={dhuliyaunaEntries}
