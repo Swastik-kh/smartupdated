@@ -152,7 +152,6 @@ const App: React.FC = () => {
       return u.organizationName === currentUser?.organizationName;
   });
 
-  // Wrapped Mag Form Handler to create PO if market purchase is checked
   const handleSaveMagForm = async (f: MagFormEntry) => {
       if (!currentUser) return;
       try {
@@ -162,50 +161,170 @@ const App: React.FC = () => {
           const updates: Record<string, any> = {};
           updates[`${orgPath}/magForms/${f.id}`] = f;
 
-          // Logic: If the form is Approved AND it was marked as "Market Purchase Required"
-          if (f.status === 'Approved' && f.storeKeeper?.status === 'market') {
-              const poId = `PO-${f.id}`;
-              const poPath = `${orgPath}/purchaseOrders/${poId}`;
-              
-              // Only create if not already exists to avoid overwriting processed POs
-              const poSnap = await get(ref(db, poPath));
-              if (!poSnap.exists()) {
-                  // Calculate next Order No based on existing orders in THIS fiscal year
-                  const ordersSnap = await get(ref(db, `${orgPath}/purchaseOrders`));
-                  const allOrders: PurchaseOrderEntry[] = ordersSnap.exists() ? Object.values(ordersSnap.val()) : [];
-                  
-                  const fyOrders = allOrders.filter(o => o.fiscalYear === f.fiscalYear && o.orderNo);
-                  const maxNo = fyOrders.reduce((max, o) => {
-                      const parts = o.orderNo?.split('-');
-                      const val = parts ? parseInt(parts[0]) : 0;
-                      return isNaN(val) ? max : Math.max(max, val);
-                  }, 0);
-
-                  const nextOrderNo = `${String(maxNo + 1).padStart(4, '0')}-KH`;
-
-                  const newPO: PurchaseOrderEntry = {
-                      id: poId,
-                      magFormId: f.id,
-                      magFormNo: f.formNo,
-                      requestDate: f.date,
-                      items: f.items,
-                      status: 'Pending',
-                      orderNo: nextOrderNo, // Automatically assigned sequential number
-                      fiscalYear: f.fiscalYear,
-                      preparedBy: { name: '', designation: '', date: '' },
-                      recommendedBy: { name: '', designation: '', date: '' },
-                      financeBy: { name: '', designation: '', date: '' },
-                      approvedBy: { name: '', designation: '', date: '' }
-                  };
-                  updates[poPath] = newPO;
+          if (f.status === 'Approved') {
+              if (f.storeKeeper?.status === 'market') {
+                  const poId = `PO-${f.id}`;
+                  const poPath = `${orgPath}/purchaseOrders/${poId}`;
+                  const poSnap = await get(ref(db, poPath));
+                  if (!poSnap.exists()) {
+                      const ordersSnap = await get(ref(db, `${orgPath}/purchaseOrders`));
+                      const allOrders: PurchaseOrderEntry[] = ordersSnap.exists() ? Object.values(ordersSnap.val()) : [];
+                      const fyOrders = allOrders.filter(o => o.fiscalYear === f.fiscalYear && o.orderNo);
+                      const maxNo = fyOrders.reduce((max, o) => {
+                          const parts = o.orderNo?.split('-');
+                          const val = parts ? parseInt(parts[0]) : 0;
+                          return isNaN(val) ? max : Math.max(max, val);
+                      }, 0);
+                      const nextOrderNo = `${String(maxNo + 1).padStart(4, '0')}-KH`;
+                      const newPO: PurchaseOrderEntry = {
+                          id: poId,
+                          magFormId: f.id,
+                          magFormNo: f.formNo,
+                          requestDate: f.date,
+                          items: f.items,
+                          status: 'Pending',
+                          orderNo: nextOrderNo,
+                          fiscalYear: f.fiscalYear,
+                          preparedBy: { name: '', designation: '', date: '' },
+                          recommendedBy: { name: '', designation: '', date: '' },
+                          financeBy: { name: '', designation: '', date: '' },
+                          approvedBy: { name: '', designation: '', date: '' }
+                      };
+                      updates[poPath] = newPO;
+                  }
+              }
+              else if (f.storeKeeper?.status === 'stock') {
+                  const irId = `IR-${f.id}`;
+                  const irPath = `${orgPath}/issueReports/${irId}`;
+                  const irSnap = await get(ref(db, irPath));
+                  if (!irSnap.exists()) {
+                      const newIR: IssueReportEntry = {
+                          id: irId,
+                          magFormId: f.id,
+                          magFormNo: f.formNo,
+                          requestDate: f.date,
+                          items: f.items,
+                          status: 'Pending',
+                          fiscalYear: f.fiscalYear,
+                          itemType: f.issueItemType || 'Expendable',
+                          storeId: f.selectedStoreId, 
+                          demandBy: f.demandBy,
+                          preparedBy: { name: '', designation: '', date: '' },
+                          recommendedBy: { name: '', designation: '', date: '' },
+                          approvedBy: { name: '', designation: '', date: '' }
+                      };
+                      updates[irPath] = newIR;
+                  }
               }
           }
-          
           await update(ref(db), updates);
       } catch (error) {
-          console.error("Error saving Mag Form / Creating PO:", error);
+          console.error("Error saving Mag Form workflow:", error);
           alert("माग फारम सुरक्षित गर्दा समस्या आयो।");
       }
+  };
+
+  const handleApproveIssueReport = async (report: IssueReportEntry) => {
+    if (!currentUser) return;
+    try {
+        const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
+        const orgPath = `orgData/${safeOrgName}`;
+        
+        // 1. Fetch current version to check previous status
+        const currentReportSnap = await get(ref(db, `${orgPath}/issueReports/${report.id}`));
+        const prevStatus = currentReportSnap.exists() ? currentReportSnap.val().status : null;
+        
+        const updates: Record<string, any> = {};
+
+        // 2. Logic to deduct stock ONLY if status is transitioning TO 'Issued'
+        if (report.status === 'Issued' && prevStatus !== 'Issued' && report.storeId) {
+            const invSnap = await get(ref(db, `${orgPath}/inventory`));
+            const inventory: Record<string, InventoryItem> = invSnap.exists() ? invSnap.val() : {};
+            const inventoryKeys = Object.keys(inventory);
+
+            // Fetch the linked Mag Form to update its remarks as well
+            const magFormSnap = await get(ref(db, `${orgPath}/magForms/${report.magFormId}`));
+            let linkedMagForm: MagFormEntry | null = magFormSnap.exists() ? magFormSnap.val() : null;
+
+            const updatedReportItems = report.items.map(rptItem => {
+                let remainingToIssue = Number(rptItem.quantity) || 0;
+                let usedBatches: string[] = [];
+
+                // FEFO: Find and sort inventory items
+                const matchingInventoryItems = inventoryKeys
+                    .map(key => ({ key, data: inventory[key] }))
+                    .filter(item => 
+                        item.data.itemName.trim().toLowerCase() === rptItem.name.trim().toLowerCase() &&
+                        item.data.storeId === report.storeId &&
+                        item.data.itemType === report.itemType &&
+                        item.data.currentQuantity > 0
+                    );
+
+                // FEFO Sort: Near Expiry Date first
+                matchingInventoryItems.sort((a, b) => {
+                    const dateA = a.data.expiryDateAd ? new Date(a.data.expiryDateAd).getTime() : Infinity;
+                    const dateB = b.data.expiryDateAd ? new Date(b.data.expiryDateAd).getTime() : Infinity;
+                    return dateA - dateB;
+                });
+
+                for (const invMatch of matchingInventoryItems) {
+                    if (remainingToIssue <= 0) break;
+                    const invItem = invMatch.data;
+                    const availableQty = invItem.currentQuantity;
+                    const takeQty = Math.min(availableQty, remainingToIssue);
+                    const newQty = availableQty - takeQty;
+                    remainingToIssue -= takeQty;
+
+                    if (invItem.batchNo) {
+                        usedBatches.push(`B:${invItem.batchNo}(${takeQty}${invItem.unit})`);
+                    }
+
+                    const rate = Number(invItem.rate) || 0;
+                    const tax = Number(invItem.tax) || 0;
+                    const newTotal = newQty * rate * (1 + tax / 100);
+
+                    updates[`${orgPath}/inventory/${invMatch.key}`] = {
+                        ...invItem,
+                        currentQuantity: newQty,
+                        totalAmount: newTotal,
+                        lastUpdateDateBs: report.issueDate || report.requestDate,
+                    };
+                }
+
+                if (usedBatches.length > 0) {
+                    const batchInfo = usedBatches.join(', ');
+                    const newRemarks = rptItem.remarks ? `${rptItem.remarks} [Batch: ${batchInfo}]` : `[Batch: ${batchInfo}]`;
+                    
+                    // Update linked Mag Form's item remarks if form exists
+                    if (linkedMagForm) {
+                        linkedMagForm.items = linkedMagForm.items.map(mItem => {
+                            if (mItem.name.trim().toLowerCase() === rptItem.name.trim().toLowerCase()) {
+                                return { ...mItem, remarks: newRemarks };
+                            }
+                            return mItem;
+                        });
+                    }
+
+                    return { ...rptItem, remarks: newRemarks };
+                }
+                return rptItem;
+            });
+
+            report.items = updatedReportItems;
+
+            // Save the updated Mag Form with batch info in remarks
+            if (linkedMagForm) {
+                updates[`${orgPath}/magForms/${report.magFormId}`] = linkedMagForm;
+            }
+        }
+
+        // 3. Final Update to Database
+        updates[`${orgPath}/issueReports/${report.id}`] = report;
+        await update(ref(db), updates);
+    } catch (error) {
+        console.error("Error issuing report with FEFO and audit trail:", error);
+        alert("निकासा गर्दा स्टक र माग फारम अपडेट गर्न समस्या आयो।");
+    }
   };
 
   const handleApproveStockEntry = async (requestId: string, approverName: string, approverDesignation: string) => {
@@ -230,7 +349,9 @@ const App: React.FC = () => {
               const existingItem = currentInvList.find(i => 
                   i.itemName.trim().toLowerCase() === item.itemName.trim().toLowerCase() && 
                   i.storeId === request.storeId &&
-                  i.itemType === item.itemType
+                  i.itemType === item.itemType &&
+                  i.batchNo === item.batchNo && 
+                  i.expiryDateAd === item.expiryDateAd
               );
 
               const incomingQty = Number(item.currentQuantity) || 0;
@@ -325,7 +446,7 @@ const App: React.FC = () => {
           purchaseOrders={purchaseOrders}
           onUpdatePurchaseOrder={(o) => set(getOrgRef(`purchaseOrders/${o.id}`), o)}
           issueReports={issueReports}
-          onUpdateIssueReport={(r) => set(getOrgRef(`issueReports/${r.id}`), r)}
+          onUpdateIssueReport={handleApproveIssueReport} 
           rabiesPatients={rabiesPatients}
           onAddRabiesPatient={(p) => set(getOrgRef(`rabiesPatients/${p.id}`), p)}
           onUpdateRabiesPatient={(p) => set(getOrgRef(`rabiesPatients/${p.id}`), p)}

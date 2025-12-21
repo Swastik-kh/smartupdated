@@ -65,13 +65,16 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
         const targetFiscalYear = report.fiscalYear || currentFiscalYear;
         const reportsInCurrentFY = reports.filter(r => r.fiscalYear === targetFiscalYear);
         
+        // Issue Number Generation: 001-NI format
         const maxIssueNo = reportsInCurrentFY.reduce((max, r) => {
-            const num = parseInt(r.issueNo || '0');
+            if (!r.issueNo) return max;
+            const parts = r.issueNo.split('-');
+            const num = parseInt(parts[0]);
             return isNaN(num) ? max : Math.max(max, num);
         }, 0);
 
-        const nextIssueNo = report.issueNo ? report.issueNo : (maxIssueNo + 1).toString();
-        const defaultIssueDate = report.issueDate || '';
+        const nextIssueNo = report.issueNo ? report.issueNo : `${String(maxIssueNo + 1).padStart(3, '0')}-NI`;
+        const defaultIssueDate = report.issueDate || todayBS;
         
         setIrItems(report.items);
 
@@ -88,7 +91,7 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
                 date: report.preparedBy.date || ''
             } : (
                 (report.status === 'Pending' && isStoreKeeper && !viewOnly) 
-                ? { name: currentUser.fullName, designation: currentUser.designation, date: defaultIssueDate }
+                ? { name: currentUser.fullName, designation: currentUser.designation, date: todayBS }
                 : { name: '', designation: '', date: '' }
             ),
             
@@ -104,7 +107,7 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
                 date: report.approvedBy.date || ''
             } : (
                 (report.status === 'Pending Approval' && isApprover && !viewOnly) 
-                ? { name: currentUser.fullName, designation: currentUser.designation, date: defaultIssueDate }
+                ? { name: currentUser.fullName, designation: currentUser.designation, date: todayBS }
                 : { name: '', designation: '', date: '' }
             ),
             rejectionReason: report.rejectionReason || ''
@@ -124,7 +127,14 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
         setReportDetails(prev => ({
             ...prev,
             issueDate: val,
-            preparedBy: { ...prev.preparedBy, date: val } 
+            // If storekeeper is preparing, set their signature date
+            preparedBy: (selectedReport?.status === 'Pending' && isStoreKeeper) 
+                ? { ...prev.preparedBy, date: val } 
+                : prev.preparedBy,
+            // If admin is approving, set their signature date
+            approvedBy: (selectedReport?.status === 'Pending Approval' && isApprover)
+                ? { ...prev.approvedBy, date: val }
+                : prev.approvedBy
         }));
     };
 
@@ -132,23 +142,9 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
         if (!selectedReport || isViewOnlyMode) return;
         setValidationError(null);
 
-        const date = reportDetails.issueDate.trim();
-        if (!date) {
+        if (!reportDetails.issueDate) {
             setValidationError('निकासा मिति अनिवार्य छ (Issue Date is required)।');
             return;
-        }
-
-        if (selectedReport.status === 'Pending' && isStoreKeeper) {
-            if (!reportDetails.preparedBy.name) {
-                setValidationError('कृपया तयार गर्नेको नाम भर्नुहोस्।');
-                return;
-            }
-        }
-        if (selectedReport.status === 'Pending Approval' && isApprover) {
-             if (!reportDetails.approvedBy.name) {
-                setValidationError('कृपया स्वीकृत गर्नेको नाम भर्नुहोस्।');
-                return;
-            }
         }
 
         setIsProcessing(true);
@@ -156,12 +152,9 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
         let nextStatus = selectedReport.status;
         let successMsg = "विवरण सुरक्षित भयो!";
 
-        let updatedPreparedBy = reportDetails.preparedBy;
-        let updatedApprovedBy = reportDetails.approvedBy;
-
         if (isStoreKeeper && selectedReport.status === 'Pending') {
             nextStatus = 'Pending Approval';
-            successMsg = "निकासा प्रतिवेदन तयार भयो र स्वीकृतिको लागि पठाइयो (Prepared & Sent for Approval)";
+            successMsg = "निकासा प्रतिवेदन तयार भयो र स्वीकृतिको लागि पठाइयो (Forwarded for Approval)";
         } else if (isApprover && selectedReport.status === 'Pending Approval') {
             nextStatus = 'Issued';
             successMsg = "निकासा प्रतिवेदन स्वीकृत र जारी गरियो (Approved & Issued)";
@@ -172,9 +165,9 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
             status: nextStatus,
             issueNo: reportDetails.issueNo,
             issueDate: reportDetails.issueDate,
-            preparedBy: updatedPreparedBy,
+            preparedBy: reportDetails.preparedBy,
             recommendedBy: reportDetails.recommendedBy,
-            approvedBy: updatedApprovedBy,
+            approvedBy: reportDetails.approvedBy,
             rejectionReason: "" 
         };
 
@@ -208,7 +201,7 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
             ...existingReport,
             status: 'Rejected',
             rejectionReason: rejectionReasonInput.trim(),
-            approvedBy: { name: '', designation: '', date: '' }, 
+            approvedBy: { name: currentUser.fullName, designation: currentUser.designation, date: todayBS }, 
         };
 
         onSave(rejectedReport);
@@ -219,8 +212,6 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
             handleBack(); 
         }, 1500);
     };
-
-    const totalAmount = irItems.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
 
     const actionableReports = reports.filter(report => {
         if (isStoreKeeper) return report.status === 'Pending'; 
@@ -261,16 +252,15 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
                                 खर्च निकासा फाराम (Issue Report Form)
                             </h2>
                             <div className="flex items-center gap-2">
-                                <span className={`text-xs px-2 py-0.5 rounded border ${
-                                    isReq ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                <span className={`text-xs px-2 py-0.5 rounded border font-bold ${
                                     (data as IssueReportEntry).status === 'Issued' ? 'bg-green-50 text-green-700 border-green-200' :
                                     (data as IssueReportEntry).status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200' :
+                                    (data as IssueReportEntry).status === 'Pending Approval' ? 'bg-purple-50 text-purple-700 border-purple-200' :
                                     'bg-blue-50 text-blue-700 border-blue-200'
                                 }`}>
-                                    Status: {isReq ? 'Pending' : (data as IssueReportEntry).status}
+                                    Status: {(data as IssueReportEntry).status}
                                 </span>
-                                {isViewOnlyMode && <span className="text-xs font-bold text-slate-500">PREVIEW MODE</span>}
-                                {isNonExpendable && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">Non-Expendable</span>}
+                                {isViewOnlyMode && <span className="text-xs font-bold text-slate-400">PREVIEW</span>}
                             </div>
                         </div>
                     </div>
@@ -278,18 +268,18 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
                          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white hover:bg-slate-900 rounded-lg font-medium shadow-sm transition-colors">
                             <Printer size={18} /> Print
                         </button>
-                        {!isViewOnlyMode && !isReq && (
+                        {!isViewOnlyMode && (
                             <>
                                 {isApprover && (data as IssueReportEntry).status === 'Pending Approval' && (
-                                    <button onClick={() => handleRejectModalOpen((data as IssueReportEntry).id)} className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg font-medium transition-colors">
+                                    <button onClick={() => handleRejectModalOpen((data as IssueReportEntry).id)} className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg font-medium transition-colors border border-red-200">
                                         <X size={18} /> Reject
                                     </button>
                                 )}
-                                <button onClick={handleSaveReport} disabled={isProcessing} className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white hover:bg-primary-700 rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50">
+                                <button onClick={handleSaveReport} disabled={isProcessing} className="flex items-center gap-2 px-6 py-2 bg-primary-600 text-white hover:bg-primary-700 rounded-lg font-bold shadow-lg transition-all active:scale-95 disabled:opacity-50">
                                     {isProcessing ? 'Processing...' : (
                                         <>
-                                            {isStoreKeeper ? <Send size={18} /> : <CheckCircle2 size={18} />}
-                                            {isStoreKeeper ? 'Prepare & Forward' : 'Approve & Issue'}
+                                            {isStoreKeeper ? <Send size={18} /> : <ShieldCheck size={18} />}
+                                            {isStoreKeeper ? 'पेश गर्नुहोस् (Forward)' : 'स्वीकृत गर्नुहोस् (Approve & Issue)'}
                                         </>
                                     )}
                                 </button>
@@ -340,8 +330,8 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
                             </div>
                             <div className="flex items-center gap-2 justify-end">
                                 <span>मिति :</span>
-                                {isReq ? (
-                                    <input value={detailIssueDate} readOnly className="border-b border-dotted border-slate-800 w-32 text-center bg-transparent font-bold" />
+                                {isViewOnlyMode ? (
+                                    <span className="border-b border-dotted border-slate-800 w-32 text-center inline-block font-bold">{reportDetails.issueDate}</span>
                                 ) : (
                                     <NepaliDatePicker 
                                         value={reportDetails.issueDate} 
@@ -405,7 +395,7 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
 
                     <div className="grid grid-cols-3 gap-8 text-sm pt-8">
                         <div>
-                            <h4 className="font-bold mb-4">तयार गर्ने:.......</h4>
+                            <h4 className="font-bold mb-4">तयार गर्ने (जिन्सी शाखा):</h4>
                             <div className="space-y-1">
                                 <div className="flex gap-2"><span>नाम :</span><input value={reportDetails.preparedBy.name} readOnly className="border-b border-dotted border-slate-400 outline-none flex-1 bg-transparent" /></div>
                                 <div className="flex gap-2"><span>पद :</span><input value={reportDetails.preparedBy.designation} readOnly className="border-b border-dotted border-slate-400 outline-none flex-1 bg-transparent" /></div>
@@ -413,7 +403,7 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
                             </div>
                         </div>
                         <div>
-                            <h4 className="font-bold mb-4">सिफारिस गर्ने:.......</h4>
+                            <h4 className="font-bold mb-4">सिफारिस गर्ने:</h4>
                             <div className="space-y-1">
                                 <div className="flex gap-2"><span>नाम :</span><input value={reportDetails.recommendedBy.name} readOnly className="border-b border-dotted border-slate-400 outline-none flex-1 bg-transparent" /></div>
                                 <div className="flex gap-2"><span>पद :</span><input value={reportDetails.recommendedBy.designation} readOnly className="border-b border-dotted border-slate-400 outline-none flex-1 bg-transparent" /></div>
@@ -421,7 +411,7 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
                             </div>
                         </div>
                         <div>
-                            <h4 className="font-bold mb-4">स्वीकृत गर्ने:.......</h4>
+                            <h4 className="font-bold mb-4">स्वीकृत गर्ने (कार्यालय प्रमुख):</h4>
                             <div className="space-y-1">
                                 <div className="flex gap-2"><span>नाम :</span><input value={reportDetails.approvedBy.name} readOnly className="border-b border-dotted border-slate-400 outline-none flex-1 bg-transparent" /></div>
                                 <div className="flex gap-2"><span>पद :</span><input value={reportDetails.approvedBy.designation} readOnly className="border-b border-dotted border-slate-400 outline-none flex-1 bg-transparent" /></div>
@@ -483,7 +473,7 @@ export const NikashaPratibedan: React.FC<NikashaPratibedanProps> = ({ reports, o
                                             onClick={() => handleLoadReport(report, false)}
                                             className="text-primary-600 hover:text-primary-800 font-medium text-xs flex items-center justify-end gap-1 bg-primary-50 px-3 py-1.5 rounded-md hover:bg-primary-100 transition-colors"
                                         >
-                                            {isStoreKeeper ? 'Prepare' : 'Approve'} <ChevronRight size={14} />
+                                            {isStoreKeeper ? 'Prepare' : 'Review & Approve'} <ChevronRight size={14} />
                                         </button>
                                     </td>
                                 </tr>

@@ -165,6 +165,7 @@ export interface IssueReportEntry {
   status: 'Pending' | 'Pending Approval' | 'Issued' | 'Rejected'; 
   fiscalYear?: string; 
   itemType?: 'Expendable' | 'Non-Expendable'; 
+  storeId?: string; // Which store to deduct from
   demandBy?: Signature; 
   preparedBy?: Signature;      
   recommendedBy?: Signature;   
