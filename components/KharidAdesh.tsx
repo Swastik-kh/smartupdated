@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo } from 'react';
 import { ShoppingCart, FilePlus, ChevronRight, ArrowLeft, Printer, Save, Calculator, CheckCircle2, Send, ShieldCheck, CheckCheck, Eye, FileText, Clock, Archive, AlertCircle, X } from 'lucide-react';
 import { PurchaseOrderEntry, MagItem, User, FirmEntry, Option, QuotationEntry, OrganizationSettings } from '../types';
@@ -106,12 +105,16 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
         const fyToUse = order.fiscalYear || currentFiscalYear;
         const fyLabel = getFiscalYearLabel(fyToUse);
 
-        const existingNumbers = orders
-            .filter(o => o.status === 'Generated' && o.fiscalYear === fyToUse)
-            .map(o => parseInt(o.orderNo || '0'));
-        
-        const maxNo = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-        const nextOrderNo = order.orderNo ? order.orderNo : (maxNo + 1).toString();
+        let nextOrderNo = order.orderNo || '';
+        if (!nextOrderNo) {
+            const fyOrders = orders.filter(o => o.fiscalYear === fyToUse && o.orderNo);
+            const maxNo = fyOrders.reduce((max, o) => {
+                const parts = o.orderNo?.split('-');
+                const val = parts ? parseInt(parts[0]) : 0;
+                return isNaN(val) ? max : Math.max(max, val);
+            }, 0);
+            nextOrderNo = `${String(maxNo + 1).padStart(4, '0')}-KH`;
+        }
 
         setPoItems(order.items.map(item => ({
             ...item,
@@ -121,15 +124,13 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
             total: item.totalAmount ? item.totalAmount.toString() : ''
         })));
         
-        const defaultDate = order.requestDate || '';
+        const defaultDate = order.requestDate || todayBS;
 
         setPoDetails(prev => ({
             ...prev,
             fiscalYear: fyLabel,
             orderNo: nextOrderNo, 
             orderDate: defaultDate, 
-            decisionNo: '',
-            decisionDate: '',
             vendorName: order.vendorDetails?.name || '',
             vendorAddress: order.vendorDetails?.address || '',
             vendorPan: order.vendorDetails?.pan || '',
@@ -138,7 +139,7 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
             expHeadNo: order.budgetDetails?.expHeadNo || '',
             activityNo: order.budgetDetails?.activityNo || '',
             
-            preparedBy: order.preparedBy ? {
+            preparedBy: (order.preparedBy && order.preparedBy.name) ? {
                 name: order.preparedBy.name,
                 designation: order.preparedBy.designation || '',
                 date: order.preparedBy.date || ''
@@ -154,7 +155,7 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
                 date: order.recommendedBy.date || ''
             } : { name: '', designation: '', date: '' },
 
-            financeBy: order.financeBy ? {
+            financeBy: (order.financeBy && order.financeBy.name) ? {
                 name: order.financeBy.name,
                 designation: order.financeBy.designation || '',
                 date: order.financeBy.date || ''
@@ -164,7 +165,7 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
                 : { name: '', designation: '', date: '' }
             ),
 
-            approvedBy: order.approvedBy ? {
+            approvedBy: (order.approvedBy && order.approvedBy.name) ? {
                 name: order.approvedBy.name,
                 designation: order.approvedBy.designation || '',
                 date: order.approvedBy.date || ''
@@ -193,41 +194,7 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
             return;
         }
 
-        const dateRegex = /^\d{4}\/\d{2}\/\d{2}$/;
-        if (!dateRegex.test(date)) {
-            setValidationError('मिति ढाँचा मिलेन (Invalid Date Format)।\nकृपया YYYY/MM/DD ढाँचा प्रयोग गर्नुहोस् (उदाहरण: 2081/04/01)');
-            return;
-        }
-
-        const [fyStart] = currentFiscalYear.split('/');
-        if (fyStart) {
-            const startYearNum = parseInt(fyStart);
-            const endYearNum = startYearNum + 1;
-            const formattedDate = date.replace(/[-.]/g, '/');
-            const minDate = `${startYearNum}/04/01`;
-            const maxDate = `${endYearNum}/03/32`;
-
-            if (formattedDate < minDate || formattedDate > maxDate) {
-                setValidationError(`मिति आर्थिक वर्ष ${currentFiscalYear} भित्रको हुनुपर्छ।\n(${minDate} देखि ${maxDate} सम्म मात्र मान्य छ)`);
-                return;
-            }
-        }
-
-        const currentOrderNoInt = parseInt(poDetails.orderNo);
-        if (!isNaN(currentOrderNoInt) && currentOrderNoInt > 1) {
-            const prevOrderNo = currentOrderNoInt - 1;
-            const previousOrder = orders.find(o => 
-                o.fiscalYear === currentFiscalYear && 
-                o.orderNo === prevOrderNo.toString()
-            );
-
-            if (previousOrder) {
-                if (date < previousOrder.requestDate) {
-                    setValidationError(`मिति क्रम मिलेन (Invalid Date Order): \nखरिद आदेश नं ${prevOrderNo} को मिति (${previousOrder.requestDate}) भन्दा \nखरिद आदेश नं ${poDetails.orderNo} को मिति (${date}) अगाडि हुन सक्दैन।`);
-                    return;
-                }
-            }
-        }
+        // --- REMOVED STRICT DATE FORMAT VALIDATION ---
         
         let nextStatus = selectedOrder.status;
         let successMessageText = "Saved successfully!";
@@ -306,7 +273,9 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
         setPoDetails(prev => ({
             ...prev, 
             orderDate: val,
-            preparedBy: { ...prev.preparedBy, date: val }
+            preparedBy: (isStoreKeeper && selectedOrder?.status === 'Pending') ? { ...prev.preparedBy, date: val } : prev.preparedBy,
+            financeBy: (isAccount && selectedOrder?.status === 'Pending Account') ? { ...prev.financeBy, date: val } : prev.financeBy,
+            approvedBy: (isAdmin && selectedOrder?.status === 'Account Verified') ? { ...prev.approvedBy, date: val } : prev.approvedBy
         }));
     };
 
@@ -324,7 +293,6 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
         if (isAccount) return order.status === 'Account Verified' || order.status === 'Generated' || order.status === 'Stock Entry Requested' || order.status === 'Completed';
         if (isAdmin) return order.status === 'Generated' || order.status === 'Stock Entry Requested' || order.status === 'Completed';
         return false;
-        // Fix: Changed subtraction to parseInt subtraction for string magFormNo
     }).sort((a, b) => parseInt(b.magFormNo) - parseInt(a.magFormNo));
 
     const canEditVendor = isStoreKeeper && !isViewOnlyMode && selectedOrder?.status === 'Pending';
@@ -387,7 +355,7 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
                     <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl shadow-sm flex items-start gap-3 animate-in slide-in-from-top-2 mx-4">
                         <div className="text-red-500 mt-0.5"><AlertCircle size={24} /></div>
                         <div className="flex-1">
-                           <h3 className="text-red-800 font-bold text-sm">मिति मिलेन (Date Error)</h3>
+                           <h3 className="text-red-800 font-bold text-sm">त्रुटि (Error)</h3>
                            <p className="text-red-700 text-sm mt-1 whitespace-pre-line leading-relaxed">{validationError}</p>
                         </div>
                         <button onClick={() => setValidationError(null)} className="text-red-400 hover:text-red-600 transition-colors"><X size={20} /></button>
@@ -415,7 +383,6 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
                                 {generalSettings.subTitleNepali && <h2 className="text-lg font-bold">{generalSettings.subTitleNepali}</h2>}
                                 {generalSettings.subTitleNepali2 && <h3 className="text-base font-bold">{generalSettings.subTitleNepali2}</h3>}
                                 {generalSettings.subTitleNepali3 && <h3 className="text-lg font-bold">{generalSettings.subTitleNepali3}</h3>}
-                                {/* ADDED: Contact Details Row */}
                                 <div className="text-xs mt-2 space-x-3 font-medium text-slate-600">
                                     {generalSettings.address && <span>{generalSettings.address}</span>}
                                     {generalSettings.phone && <span>| फोन: {generalSettings.phone}</span>}
@@ -449,7 +416,7 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
                                         className="!border-b !border-dotted !border-slate-400 !rounded-none !bg-transparent !px-0 !py-1"
                                     />
                                 ) : (
-                                    <input value={poDetails.vendorName} onChange={e => setPoDetails({...poDetails, vendorName: e.target.value})} className="border-b border-dotted border-slate-400 outline-none w-full bg-transparent focus:border-slate-800 disabled:cursor-not-allowed" disabled={true} />
+                                    <input value={poDetails.vendorName} readOnly className="border-b border-dotted border-slate-400 outline-none w-full bg-transparent focus:border-slate-800 disabled:cursor-not-allowed" />
                                 )}
                              </div>
                              <div className="flex items-center gap-2">
@@ -490,14 +457,6 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
                                     minDate={todayBS}
                                     maxDate={todayBS}
                                 />
-                            </div>
-                            <div className="flex justify-end items-center gap-2">
-                                <label className="font-bold">खरिद सम्बन्धी निर्णय नं :</label>
-                                <input value={poDetails.decisionNo} onChange={e => setPoDetails({...poDetails, decisionNo: e.target.value})} className="border-b border-dotted border-slate-400 outline-none w-24 text-center bg-transparent disabled:cursor-not-allowed" disabled={!canEditVendor} />
-                            </div>
-                            <div className="flex justify-end items-center gap-2">
-                                <label className="font-bold">निर्णय मिति :</label>
-                                <input value={poDetails.decisionDate} onChange={e => setPoDetails({...poDetails, decisionDate: e.target.value})} className="border-b border-dotted border-slate-400 outline-none w-24 text-center bg-transparent disabled:cursor-not-allowed" disabled={!canEditVendor} />
                             </div>
                         </div>
                     </div>
@@ -559,7 +518,7 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
                     <div className="space-y-8 mt-8">
                         <div className="grid grid-cols-2 gap-12">
                             <div>
-                                <label className="block font-bold mb-4">तयार गर्ने (Storekeeper):</label>
+                                <label className="block font-bold mb-4">तयार गर्ने (Prepared By):</label>
                                 <div className="space-y-2">
                                     <div className="flex gap-2">
                                         <span className="w-16">नाम :</span>
@@ -571,7 +530,7 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
                                     </div>
                                     <div className="flex gap-2">
                                         <span className="w-16">मिति :</span>
-                                        <input value={poDetails.preparedBy.date} onChange={e => setPoDetails({...poDetails, preparedBy: {...poDetails.preparedBy, date: e.target.value}})} className="border-b border-dotted border-slate-400 outline-none flex-1 bg-transparent text-xs" disabled={!isStoreKeeper || isViewOnlyMode}/>
+                                        <input value={poDetails.preparedBy.date} readOnly className="border-b border-dotted border-slate-400 outline-none flex-1 bg-transparent text-xs" />
                                     </div>
                                 </div>
                             </div>
@@ -726,7 +685,7 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
                         <tbody className="divide-y divide-slate-100">
                             {trackedOrders.map(order => (
                                 <tr key={order.id} className="hover:bg-slate-50">
-                                    <td className="px-6 py-4 font-mono font-medium text-slate-700">{order.orderNo ? `#${order.orderNo}` : '-'}</td>
+                                    <td className="px-6 py-4 font-mono font-medium text-slate-700">{order.orderNo ? order.orderNo : '-'}</td>
                                     <td className="px-6 py-4 font-mono text-slate-600">#{order.magFormNo}</td>
                                     <td className="px-6 py-4 font-nepali">{order.requestDate}</td>
                                     <td className="px-6 py-4">

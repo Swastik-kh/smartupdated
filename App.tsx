@@ -170,6 +170,19 @@ const App: React.FC = () => {
               // Only create if not already exists to avoid overwriting processed POs
               const poSnap = await get(ref(db, poPath));
               if (!poSnap.exists()) {
+                  // Calculate next Order No based on existing orders in THIS fiscal year
+                  const ordersSnap = await get(ref(db, `${orgPath}/purchaseOrders`));
+                  const allOrders: PurchaseOrderEntry[] = ordersSnap.exists() ? Object.values(ordersSnap.val()) : [];
+                  
+                  const fyOrders = allOrders.filter(o => o.fiscalYear === f.fiscalYear && o.orderNo);
+                  const maxNo = fyOrders.reduce((max, o) => {
+                      const parts = o.orderNo?.split('-');
+                      const val = parts ? parseInt(parts[0]) : 0;
+                      return isNaN(val) ? max : Math.max(max, val);
+                  }, 0);
+
+                  const nextOrderNo = `${String(maxNo + 1).padStart(4, '0')}-KH`;
+
                   const newPO: PurchaseOrderEntry = {
                       id: poId,
                       magFormId: f.id,
@@ -177,6 +190,7 @@ const App: React.FC = () => {
                       requestDate: f.date,
                       items: f.items,
                       status: 'Pending',
+                      orderNo: nextOrderNo, // Automatically assigned sequential number
                       fiscalYear: f.fiscalYear,
                       preparedBy: { name: '', designation: '', date: '' },
                       recommendedBy: { name: '', designation: '', date: '' },
