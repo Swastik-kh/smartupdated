@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Syringe, Activity, 
   ClipboardList, FileSpreadsheet, FilePlus, ShoppingCart, FileOutput, 
   BookOpen, Book, Archive, RotateCcw, Wrench, Scroll, BarChart3,
-  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2 
+  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart
 } from 'lucide-react';
 import { APP_NAME, ORG_NAME, FISCAL_YEARS } from '../constants';
 import { DashboardProps, PurchaseOrderEntry, InventoryItem } from '../types'; 
@@ -32,6 +32,8 @@ import { DatabaseManagement } from './DatabaseManagement';
 import { DhuliyaunaFaram } from './DhuliyaunaFaram';
 import { LogBook } from './LogBook';
 import { GeneralSetting } from './GeneralSetting';
+// @ts-ignore
+import NepaliDate from 'nepali-date-converter';
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
   onLogout, 
@@ -92,7 +94,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [pendingPoDakhila, setPendingPoDakhila] = useState<PurchaseOrderEntry | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [lastSeenNotificationId, setLastSeenNotificationId] = useState<string | null>(null);
-  const [expiryModalInfo, setExpiryModalInfo] = useState<{title: string, items: InventoryItem[]} | null>(null);
 
   const latestApprovedDakhila = useMemo(() => {
       const approved = stockEntryRequests.filter(req => req.status === 'Approved');
@@ -108,6 +109,98 @@ export const Dashboard: React.FC<DashboardProps> = ({
           setShowNotificationModal(true);
       }
   };
+
+  // Dashboard Statistics Calculation
+  const stats = useMemo(() => {
+    const today = new NepaliDate();
+    const todayStr = today.format('YYYY-MM-DD'); 
+    const todayAd = new Date().toISOString().split('T')[0];
+    const currentMonth = String(today.getMonth() + 1).padStart(2, '0');
+    
+    // 1. Rabies Today Count (New Cases)
+    const todayRabies = rabiesPatients.filter(p => 
+      p.regDateBs === todayStr
+    ).length;
+
+    // 2. Rabies Follow-up Stats (Today)
+    const todayScheduled = rabiesPatients.filter(p => 
+      p.schedule.some(dose => dose.date === todayAd)
+    ).length;
+
+    const todayCompleted = rabiesPatients.filter(p => 
+      p.schedule.some(dose => dose.date === todayAd && dose.status === 'Given')
+    ).length;
+
+    const todayPending = todayScheduled - todayCompleted;
+
+    // 3. Vaccine Expenditure Calculation (TODAY)
+    // Assuming 2 doses per patient visit
+    const totalDosesExpendedToday = (todayRabies + todayCompleted) * 2;
+
+    // 4. FUTURE FORECAST: DAILY VIAL WASTE LOGIC
+    // We need to group all 'Pending' doses by their scheduled DATE.
+    // Logic: A vial opened on Day X cannot be used on Day X+1.
+    const futureDailyDoses: Record<string, number> = {};
+    let totalPendingFutureFollowups = 0;
+
+    rabiesPatients.forEach(patient => {
+        patient.schedule.forEach(dose => {
+            if (dose.status === 'Pending') {
+                totalPendingFutureFollowups++;
+                // Group by date
+                const dateKey = dose.date;
+                futureDailyDoses[dateKey] = (futureDailyDoses[dateKey] || 0) + 2; // 2 doses per visit
+            }
+        });
+    });
+    
+    // Total doses needed across all future dates
+    const totalFutureDosesNeeded = totalPendingFutureFollowups * 2;
+
+    // Calculate Vials needed by summing up daily requirements
+    // 1ml vial = 10 doses
+    // 0.5ml vial = 5 doses
+    let totalFutureVials1ml = 0;
+    let totalFutureVials05ml = 0;
+    
+    Object.keys(futureDailyDoses).forEach(date => {
+        const dailyDoses = futureDailyDoses[date];
+        
+        // Vials for 1ml (10 doses)
+        const dailyVialsNeeded1ml = Math.ceil(dailyDoses / 10);
+        totalFutureVials1ml += dailyVialsNeeded1ml;
+        
+        // Vials for 0.5ml (5 doses)
+        const dailyVialsNeeded05ml = Math.ceil(dailyDoses / 5);
+        totalFutureVials05ml += dailyVialsNeeded05ml;
+    });
+
+    // 5. Monthly Stats
+    const monthlyRabies = rabiesPatients.filter(p => 
+      p.fiscalYear === currentFiscalYear && 
+      p.regMonth === currentMonth
+    ).length;
+
+    const totalInventory = inventoryItems.length;
+    const pendingMagForms = magForms.filter(f => f.status === 'Pending').length;
+    const pendingStockReq = stockEntryRequests.filter(r => r.status === 'Pending').length;
+
+    return { 
+      todayRabies, 
+      todayScheduled,
+      todayCompleted,
+      todayPending,
+      totalDosesExpendedToday,
+      totalPendingFutureFollowups,
+      totalFutureDosesNeeded,
+      futureVials1ml: totalFutureVials1ml,
+      futureVials05ml: totalFutureVials05ml, // Sum of daily 0.5ml requirements
+      monthlyRabies, 
+      totalInventory, 
+      pendingMagForms, 
+      pendingStockReq 
+    };
+  }, [rabiesPatients, currentFiscalYear, inventoryItems, magForms, stockEntryRequests]);
 
   interface MenuItem {
     id: string;
@@ -294,15 +387,151 @@ export const Dashboard: React.FC<DashboardProps> = ({
         return (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
                 <div className="flex items-center gap-3 border-b border-slate-200 pb-4 mb-6">
-                    <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
-                        <Activity size={24} />
+                    <div className="bg-primary-100 p-2 rounded-lg text-primary-600">
+                        <LayoutDashboard size={24} />
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-slate-800 font-nepali">मुख्य जानकारी (General Overview)</h2>
-                        <p className="text-sm text-slate-500">संस्थाको हालको अवस्था</p>
+                        <h2 className="text-xl font-bold text-slate-800 font-nepali">मुख्य जानकारी (Dashboard Overview)</h2>
+                        <p className="text-sm text-slate-500">संस्थाको हालको अवस्था र मुख्य तथ्याङ्कहरू</p>
                     </div>
                 </div>
-                <p className="text-slate-500 italic">Please select a menu item to get started.</p>
+
+                {/* Dashboard Stats Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {/* Today's Rabies Patients Progress */}
+                    <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-all group">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                <Syringe size={24} />
+                            </div>
+                            <span className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full uppercase">Today's Progress</span>
+                        </div>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-end">
+                                <div>
+                                    <h3 className="text-3xl font-black text-slate-800">{stats.todayRabies}</h3>
+                                    <p className="text-xs font-bold text-slate-400 font-nepali uppercase tracking-wider">नयाँ दर्ता (New)</p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-lg font-black text-green-600">{stats.todayCompleted}</span>
+                                    <span className="text-slate-300 mx-1">/</span>
+                                    <span className="text-sm font-bold text-slate-500">{stats.todayScheduled}</span>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">फलोअप (Followups)</p>
+                                </div>
+                            </div>
+                            
+                            {/* Simple Progress Bar */}
+                            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                <div 
+                                    className="bg-green-500 h-full transition-all duration-500" 
+                                    style={{ width: `${stats.todayScheduled > 0 ? (stats.todayCompleted / stats.todayScheduled) * 100 : 0}%` }}
+                                ></div>
+                            </div>
+                            
+                            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-tight">
+                                <div className="flex flex-col">
+                                    <span className="text-green-600">लगाएका: {stats.todayCompleted}</span>
+                                    <span className="text-orange-500 text-[8px]">बाँकी: {stats.todayPending}</span>
+                                </div>
+                                <div className="text-right bg-indigo-50 px-2 py-1 rounded border border-indigo-100">
+                                    <span className="text-indigo-700 block">आज खर्च: <span className="font-black">{stats.totalDosesExpendedToday}</span> <span className="text-[8px]">Doses</span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Vaccine Logistics & Future Requirement - UPDATED WITH DAILY VIAL WASTE LOGIC FOR BOTH 1ML AND 0.5ML */}
+                    <div className="bg-white p-6 rounded-2xl border border-rose-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-rose-50 rounded-bl-full -mr-12 -mt-12 opacity-50 group-hover:bg-rose-100 transition-colors"></div>
+                        <div className="flex justify-between items-start mb-4 relative z-10">
+                            <div className="bg-rose-50 p-3 rounded-xl text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-colors">
+                                <TrendingUp size={24} />
+                            </div>
+                            <span className="text-[10px] font-bold bg-rose-50 text-rose-600 px-2 py-1 rounded-full uppercase">Future Forecast</span>
+                        </div>
+                        <div className="space-y-4 relative z-10">
+                            <div>
+                                <h3 className="text-3xl font-black text-slate-800 mb-1">{stats.totalFutureDosesNeeded} <span className="text-sm font-medium text-slate-400">Doses</span></h3>
+                                <p className="text-xs font-bold text-slate-500 font-nepali">कुल भविष्यको खोप आवश्यकता</p>
+                            </div>
+                            
+                            <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-100 space-y-3">
+                                <div className="flex items-center gap-1.5 text-rose-800 font-bold text-[11px] font-nepali uppercase">
+                                    <Clock size={14} className="text-rose-500" /> भाइल स्टक अनुमान (Daily Sum)
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="border-r border-rose-200 pr-2">
+                                        <p className="text-xl font-black text-rose-600">{stats.futureVials1ml}</p>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase leading-tight">1ml Vials<br/>(10 Doses/Vial)</p>
+                                    </div>
+                                    <div className="pl-2">
+                                        <p className="text-xl font-black text-rose-600">{stats.futureVials05ml}</p>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase leading-tight">0.5ml Vials<br/>(5 Doses/Vial)</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-rose-400 italic">नोट: एक दिन खोलेको भाइल अर्को दिन प्रयोग गर्न नमिल्ने गरी गणना गरिएको छ।</p>
+                        </div>
+                    </div>
+
+                    {/* Pending Mag Forms */}
+                    <div className="bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-all group">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="bg-orange-50 p-3 rounded-xl text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                                <FilePlus size={24} />
+                            </div>
+                            <span className="text-[10px] font-bold bg-orange-50 text-orange-600 px-2 py-1 rounded-full uppercase">Pending</span>
+                        </div>
+                        <h3 className="text-3xl font-black text-slate-800 mb-1">{stats.pendingMagForms}</h3>
+                        <p className="text-sm font-bold text-slate-500 font-nepali">बाँकी माग फारम (Mag Forms)</p>
+                        <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-2 text-orange-600 text-xs font-bold cursor-pointer hover:underline" onClick={() => setActiveItem('mag_faram')}>
+                            प्रमाणिकरण गर्नुहोस् <ChevronRight size={14} />
+                        </div>
+                    </div>
+
+                    {/* Pending Stock Requests */}
+                    <div className="bg-white p-6 rounded-2xl border border-teal-100 shadow-sm hover:shadow-md transition-all group">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="bg-teal-50 p-3 rounded-xl text-teal-600 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                                <ClipboardCheck size={24} />
+                            </div>
+                            <span className="text-[10px] font-bold bg-teal-50 text-teal-600 px-2 py-1 rounded-full uppercase">To Approve</span>
+                        </div>
+                        <h3 className="text-3xl font-black text-slate-800 mb-1">{stats.pendingStockReq}</h3>
+                        <p className="text-sm font-bold text-slate-500 font-nepali">स्टक दाखिला अनुरोध (Entries)</p>
+                        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-teal-600 text-xs font-bold cursor-pointer hover:underline" onClick={() => setActiveItem('stock_entry_approval')}>
+                            स्वीकृति दिनुहोस् <ChevronRight size={14} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Recent Activity / Welcome section */}
+                <div className="bg-gradient-to-r from-primary-600 to-indigo-700 rounded-[2rem] p-10 text-white shadow-xl shadow-primary-900/10 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
+                    <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                        <div className="max-w-xl text-center md:text-left">
+                            <h2 className="text-3xl font-black font-nepali mb-3">नमस्ते, {currentUser.fullName}!</h2>
+                            <p className="text-primary-100 text-lg font-medium opacity-90 leading-relaxed">
+                                स्मार्ट जिन्सी व्यवस्थापन प्रणालीमा तपाईंलाई स्वागत छ। <br className="hidden md:block" /> 
+                                बायाँतर्फको मेनुबाट कार्य छनोट गरी सुरु गर्नुहोस्।
+                            </p>
+                            <div className="mt-8 flex flex-wrap gap-4 justify-center md:justify-start">
+                                <button onClick={() => setActiveItem('mag_faram')} className="bg-white text-primary-700 px-6 py-3 rounded-xl font-bold text-sm shadow-lg hover:scale-105 transition-transform flex items-center gap-2">
+                                    <FilePlus size={18} /> नयाँ माग फारम
+                                </button>
+                                <div className="bg-white/10 backdrop-blur-md px-5 py-3 rounded-xl border border-white/20 flex items-center gap-3">
+                                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                    <span className="text-xs font-bold uppercase tracking-wider">System Live & Secure</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="hidden lg:block">
+                            <div className="bg-white/10 p-8 rounded-[2.5rem] backdrop-blur-md border border-white/20 shadow-inner">
+                                <PieChart size={120} className="text-white opacity-80" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         );
       case 'user_management':
@@ -314,7 +543,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       case 'tb_leprosy':
         return <TBPatientRegistration currentFiscalYear={currentFiscalYear} />;
       case 'rabies':
-        /* Fixed: Changed onUpdatePatient to use onUpdateRabiesPatient which is destructured from props */
         return <RabiesRegistration currentFiscalYear={currentFiscalYear} patients={rabiesPatients} onAddPatient={onAddRabiesPatient} onUpdatePatient={onUpdateRabiesPatient} onDeletePatient={onDeletePatient} currentUser={currentUser} />;
       case 'report_rabies':
         return <RabiesReport currentFiscalYear={currentFiscalYear} currentUser={currentUser} patients={rabiesPatients} />;
@@ -333,7 +561,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       case 'stock_entry_approval':
         return <StockEntryApproval requests={stockEntryRequests} currentUser={currentUser} onApprove={onApproveStockEntry} onReject={onRejectStockEntry} stores={stores} />;
       case 'dakhila_pratibedan':
-        return <DakhilaPratibedan dakhilaReports={dakhilaReports} onSaveDakhilaReport={onSaveDakhilaReport} currentFiscalYear={currentFiscalYear} currentUser={currentUser} stockEntryRequests={stockEntryRequests} onApproveStockEntry={onApproveStockEntry} onRejectStockEntry={onRejectStockEntry} generalSettings={generalSettings} stores={stores} />;
+        return <DakhilaPratibedan dakhilaReports={dakhilaReports} onSaveDakhilaReport={onSaveDakhilaReport} currentFiscalYear={currentFiscalYear} currentUser={currentUser} stockEntryRequests={stockEntryRequests} onApproveStockEntry={onApproveStockEntry} onReject={onRejectStockEntry} generalSettings={generalSettings} stores={stores} />;
       case 'sahayak_jinshi_khata': 
         return <SahayakJinshiKhata currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} issueReports={issueReports} dakhilaReports={dakhilaReports} stockEntryRequests={stockEntryRequests} users={users} returnEntries={returnEntries} generalSettings={generalSettings} />;
       case 'jinshi_khata':
