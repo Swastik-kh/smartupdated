@@ -87,26 +87,19 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
 
     issueReports.forEach(report => {
         // 1. Check if the report is 'Issued' and belongs to the person returning
-        // Note: We match against the 'Returned By' name field in the form, allowing dynamic updates if user changes the name manually.
         if (report.status === 'Issued' && report.demandBy?.name.trim().toLowerCase() === formDetails.returnedBy.name.trim().toLowerCase()) {
             
             // 2. Check if report is for Non-Expendable items
-            // (Only Non-Expendable items are usually returned to stock)
             if (report.itemType === 'Non-Expendable') {
                 
                 report.items.forEach(rptItem => {
-                    // Avoid duplicates in the dropdown
                     if (!distinctItems.has(rptItem.name)) {
-                        
-                        // Try to find the original inventory item to get extra details like unique code
                         const invItem = inventoryItems.find(i => i.itemName.trim().toLowerCase() === rptItem.name.trim().toLowerCase());
                         
                         distinctItems.set(rptItem.name, {
                             id: invItem?.id || rptItem.id.toString(), 
                             value: rptItem.name,
-                            // Show name + code for clarity
                             label: `${rptItem.name} ${invItem?.uniqueCode ? `(${invItem.uniqueCode})` : (invItem?.sanketNo ? `(${invItem.sanketNo})` : '')}`,
-                            // Store data for onSelect
                             itemData: invItem || { ...rptItem, itemName: rptItem.name } 
                         });
                     }
@@ -134,7 +127,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
       if (item.id === id) {
         const updated = { ...item, [field]: value };
         
-        // Calculations
         if (['quantity', 'rate', 'vatAmount'].includes(field)) {
           const qty = field === 'quantity' ? parseFloat(value) || 0 : item.quantity;
           const rate = field === 'rate' ? parseFloat(value) || 0 : item.rate;
@@ -160,7 +152,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
                 specification: invItem.specification || '',
                 unit: invItem.unit,
                 rate: invItem.rate || 0,
-                // Do not auto-set quantity as it's return quantity
             };
         }
         return item;
@@ -197,9 +188,8 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
       });
       setItems(entry.items);
       setIsViewOnly(viewOnly);
-      setIsSaved(false); // Reset saved status so buttons re-appear if applicable
+      setIsSaved(false); 
       
-      // Scroll to form
       const formElement = document.getElementById('firta-form-container');
       if (formElement) formElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -208,7 +198,7 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
       setFormDetails({
         id: '',
         fiscalYear: currentFiscalYear,
-        formNo: '1', // Will update via useEffect
+        formNo: '1', 
         date: '',
         status: 'Pending',
         returnedBy: { name: currentUser.fullName, designation: currentUser.designation, date: '' },
@@ -234,10 +224,10 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
         date: formDetails.date,
         items: items,
         status: statusToSet,
-        returnedBy: formDetails.returnedBy,
-        preparedBy: statusToSet === 'Approved' ? { ...formDetails.preparedBy, name: currentUser.fullName } : formDetails.preparedBy,
+        returnedBy: { ...formDetails.returnedBy, date: formDetails.date },
+        preparedBy: statusToSet === 'Approved' ? { name: currentUser.fullName, designation: currentUser.designation, date: formDetails.date } : formDetails.preparedBy,
         recommendedBy: formDetails.recommendedBy,
-        approvedBy: statusToSet === 'Approved' ? { ...formDetails.approvedBy, name: currentUser.fullName, date: formDetails.date } : formDetails.approvedBy,
+        approvedBy: statusToSet === 'Approved' ? { name: currentUser.fullName, designation: currentUser.designation, date: formDetails.date } : formDetails.approvedBy,
     };
 
     onSaveReturnEntry(entry);
@@ -285,7 +275,7 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
                               <td className="px-6 py-3">{req.items.length} items</td>
                               <td className="px-6 py-3 text-right">
                                   <button 
-                                    onClick={() => handleLoadEntry(req, false)} // Load as editable for approval
+                                    onClick={() => handleLoadEntry(req, false)}
                                     className="text-primary-600 hover:text-primary-800 font-medium text-xs flex items-center justify-end gap-1 bg-primary-50 px-3 py-1.5 rounded-md hover:bg-primary-100 transition-colors border border-primary-200"
                                   >
                                       <Eye size={14} /> Preview & Approve
@@ -322,7 +312,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
             
             {!isViewOnly && (
                 <>
-                    {/* If Storekeeper/Admin viewing a pending request -> Approve Button */}
                     {(isStoreKeeper && formDetails.status === 'Pending' && formDetails.id) ? (
                         <button 
                             onClick={() => handleSave('Approved')} 
@@ -331,7 +320,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
                             <CheckCircle2 size={18} /> Approve & Verify
                         </button>
                     ) : (
-                        /* Normal User submitting new request */
                         <button 
                             onClick={() => handleSave('Pending')} 
                             disabled={isSaved || formDetails.status === 'Approved'}
@@ -355,7 +343,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
       {/* 3. MAIN FORM CONTENT (A4 Layout) */}
       <div id="firta-form-container" className="bg-white p-8 md:p-12 rounded-xl shadow-lg max-w-[297mm] mx-auto min-h-[210mm] text-slate-900 font-nepali text-xs print:shadow-none print:p-0 print:max-w-none landscape:w-full overflow-x-auto">
         
-        {/* Top Right */}
         <div className="text-right text-[10px] font-bold mb-2">
             म.ले.प.फारम नं: ४०५
         </div>
@@ -363,7 +350,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
         {/* Header */}
         <div className="mb-8">
              <div className="flex items-start justify-between">
-                 {/* Left: Logo */}
                  <div className="w-24 flex justify-start pt-2">
                      <img 
                        src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Emblem_of_Nepal.svg/1200px-Emblem_of_Nepal.svg.png" 
@@ -372,7 +358,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
                      />
                  </div>
                  
-                 {/* Center: Text */}
                  <div className="flex-1 text-center space-y-1">
                      <h1 className="text-xl font-bold text-red-600">{generalSettings.orgNameNepali}</h1>
                      {generalSettings.subTitleNepali && <h2 className="text-lg font-bold">{generalSettings.subTitleNepali}</h2>}
@@ -380,7 +365,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
                      {generalSettings.subTitleNepali3 && <h3 className="text-lg font-bold">{generalSettings.subTitleNepali3}</h3>}
                  </div>
 
-                 {/* Right: Spacer for balance */}
                  <div className="w-24"></div> 
              </div>
              
@@ -438,7 +422,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
                     <th className="border border-slate-900 p-1 w-16">सङ्केत नं.</th>
                     <th className="border border-slate-900 p-1 w-64">नाम</th>
                     <th className="border border-slate-900 p-1 w-24">स्पेसिफिकेसन</th>
-                    {/* Price Columns Breakdown */}
                     <th className="border border-slate-900 p-1 w-20">जम्मा मूल्य (मू.अ.कर बाहेक)</th>
                     <th className="border border-slate-900 p-1 w-16">मू.अ.कर</th>
                     <th className="border border-slate-900 p-1 w-20">जम्मा मूल्य</th>
@@ -532,7 +515,6 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
                     </tr>
                 ))}
                 
-                {/* Totals */}
                 <tr className="font-bold bg-slate-50">
                     <td colSpan={9} className="border border-slate-900 p-1 text-right pr-2">जम्मा रकम</td>
                     <td className="border border-slate-900 p-1 text-right px-1">{totalAmountSum.toFixed(2)}</td>
@@ -554,17 +536,17 @@ export const JinshiFirtaFaram: React.FC<JinshiFirtaFaramProps> = ({
         {/* Footer */}
         <div className="grid grid-cols-2 gap-8 mt-12 text-sm">
             <div>
-                <div className="font-bold mb-4">फाँटवालाको दस्तखत:</div>
+                <div className="font-bold mb-4">अनुरोधकर्ताको दस्तखत:</div>
                 <div className="space-y-1">
-                    <div className="flex gap-2"><span>नाम:</span><input value={formDetails.preparedBy.name} className="border-b border-dotted border-slate-600 flex-1 outline-none bg-transparent" disabled/></div>
-                    <div className="flex gap-2"><span>पद:</span><input value={formDetails.preparedBy.designation} className="border-b border-dotted border-slate-600 flex-1 outline-none bg-transparent" disabled/></div>
-                    <div className="flex gap-2"><span>मिति:</span><input value={formDetails.preparedBy.date || formDetails.date} className="border-b border-dotted border-slate-600 flex-1 outline-none bg-transparent" disabled/></div>
+                    <div className="flex gap-2"><span>नाम:</span><input value={formDetails.returnedBy.name} className="border-b border-dotted border-slate-600 flex-1 outline-none bg-transparent font-bold" disabled/></div>
+                    <div className="flex gap-2"><span>पद:</span><input value={formDetails.returnedBy.designation} className="border-b border-dotted border-slate-600 flex-1 outline-none bg-transparent" disabled/></div>
+                    <div className="flex gap-2"><span>मिति:</span><input value={formDetails.returnedBy.date || formDetails.date} className="border-b border-dotted border-slate-600 flex-1 outline-none bg-transparent" disabled/></div>
                 </div>
             </div>
             <div>
                 <div className="font-bold mb-4">कार्यालय प्रमुखको दस्तखत:</div>
                 <div className="space-y-1">
-                    <div className="flex gap-2"><span>नाम:</span><input value={formDetails.approvedBy.name} className="border-b border-dotted border-slate-600 flex-1 outline-none bg-transparent" disabled/></div>
+                    <div className="flex gap-2"><span>नाम:</span><input value={formDetails.approvedBy.name} className="border-b border-dotted border-slate-600 flex-1 outline-none bg-transparent font-bold" disabled/></div>
                     <div className="flex gap-2"><span>पद:</span><input value={formDetails.approvedBy.designation} className="border-b border-dotted border-slate-600 flex-1 outline-none bg-transparent" disabled/></div>
                     <div className="flex gap-2"><span>मिति:</span><input value={formDetails.approvedBy.date} className="border-b border-dotted border-slate-600 flex-1 outline-none bg-transparent" disabled/></div>
                 </div>
