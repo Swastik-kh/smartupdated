@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Package, Calendar, Plus, RotateCcw, Save, X, CheckCircle2, Search, 
@@ -352,6 +353,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
         }
     }, []);
 
+    // Effect to pre-load PO data and intelligently match existing items
     useEffect(() => {
         if (initialData) {
             setCommonDetails(prev => ({
@@ -366,11 +368,23 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                 const newItem = createEmptyBulkItem(mode, initialStoreId);
                 const qty = parseFloat(poItem.quantity.toString()) || 0;
                 const rt = parseFloat(poItem.rate?.toString() || '0') || 0;
+                
+                // INTELLIGENT MATCHING: Check if this item already exists in inventory
+                // We check globally first to get meta-data (Code, Type, Classification)
+                const existingInfo = inventoryItems.find(i => 
+                    i.itemName.trim().toLowerCase() === poItem.name.trim().toLowerCase()
+                );
+
                 return {
                     ...newItem,
                     itemName: poItem.name,
-                    specification: poItem.specification || '',
-                    unit: poItem.unit,
+                    specification: poItem.specification || existingInfo?.specification || '',
+                    uniqueCode: existingInfo?.uniqueCode || '',
+                    sanketNo: poItem.codeNo || existingInfo?.sanketNo || '',
+                    ledgerPageNo: existingInfo?.ledgerPageNo || '',
+                    itemType: existingInfo?.itemType || ('' as any),
+                    itemClassification: existingInfo?.itemClassification || '',
+                    unit: poItem.unit || existingInfo?.unit || '',
                     currentQuantity: qty,
                     rate: rt, 
                     totalAmount: qty * rt
@@ -381,7 +395,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                 setBulkItems(itemsFromPo);
             }
         }
-    }, [initialData, createEmptyBulkItem, mode, initialStoreId, initialDakhilaNo]);
+    }, [initialData, createEmptyBulkItem, mode, initialStoreId, initialDakhilaNo, inventoryItems]);
 
     const [validationError, setValidationError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -681,7 +695,6 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                         <Input label="आर्थिक वर्ष" value={currentFiscalYear} readOnly disabled icon={<Calendar size={16} />} tabIndex={-1} />
                         <Select label="गोदाम/स्टोर *" options={storeOptions} value={commonDetails.storeId} onChange={e => handleCommonDetailsChange('storeId', e.target.value)} required icon={<StoreIcon size={16} />} />
                         <Select label="प्राप्तिको स्रोत" options={mode === 'opening' ? [{ id: 'opening', value: 'Opening', label: 'ओपनिङ्ग' }] : receiptSourceOptions} value={commonDetails.receiptSource} onChange={e => handleCommonDetailsChange('receiptSource', e.target.value)} required icon={<ArrowUpCircle size={16} />} disabled={mode === 'opening'} />
-                        {/* Fix: changed minDate and maxDate from todayBS to todayBs to match the defined constant */}
                         <NepaliDatePicker label="मिति (BS)" value={commonDetails.dateBs} onChange={val => handleCommonDetailsChange('dateBs', val)} required minDate={todayBs} maxDate={todayBs} />
                         <div className="col-span-2"><Input label="आपूर्तिकर्ता / स्रोत" value={commonDetails.supplier} onChange={(e) => handleCommonDetailsChange('supplier', e.target.value)} placeholder="Supplier Name" icon={<User size={16} />} /></div>
                         <div className="col-span-1"><Input label="खरिद आदेश / हस्तान्तरण नं" value={commonDetails.refNo} onChange={(e) => handleCommonDetailsChange('refNo', e.target.value)} placeholder="PO / Hafa No" icon={<FileText size={16} />} /></div>
@@ -718,7 +731,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                                         <td className="px-1 py-1"><Input value={item.ledgerPageNo || ''} onChange={e => handleItemFieldChange(item.id, 'ledgerPageNo', e.target.value)} placeholder="पाना नं" className="!pl-3" label="" icon={undefined}/></td>
                                         <td className="px-1 py-1"><Input value={item.uniqueCode || ''} onChange={e => handleItemFieldChange(item.id, 'uniqueCode', e.target.value)} placeholder="कोड" className="!pl-3" label="" icon={undefined}/></td>
                                         <td className="px-1 py-1"><Input value={item.sanketNo || ''} onChange={e => handleItemFieldChange(item.id, 'sanketNo', e.target.value)} placeholder="सङ्केत नं" className="!pl-3" label="" icon={undefined}/></td>
-                                        <td className="px-1 py-1"><Select options={itemTypeOptions} value={item.itemType} onChange={e => handleItemFieldChange(item.id, 'itemType', e.target.value as any)} placeholder="-- प्रकार --" className={`!pl-3 !pr-8 ${index > 0 ? 'bg-slate-100' : ''}`} icon={undefined} label="" disabled={index > 0} /></td>
+                                        <td className="px-1 py-1"><Select options={itemTypeOptions} value={item.itemType} onChange={e => handleItemFieldChange(item.id, 'itemType', e.target.value as any)} placeholder="-- प्रकार --" className={`!pl-3 !pr-8 ${index > 0 && !item.itemType ? '' : ''}`} icon={undefined} label="" disabled={index > 0 && !!bulkItems[0].itemType} /></td>
                                         <td className="px-1 py-1"><Select options={itemClassificationOptions} value={item.itemClassification || ''} onChange={e => handleItemFieldChange(item.id, 'itemClassification', e.target.value)} placeholder="-- वर्गीकरण --" className="!pl-3 !pr-8" icon={undefined} label="" onAddOptionHotkeyTriggered={() => setShowAddClassificationModal(true)} addOptionHotkey="Alt+c" /></td>
                                         <td className="px-1 py-1"><Input value={item.unit} onChange={e => handleItemFieldChange(item.id, 'unit', e.target.value)} placeholder="एकाई" className="!pl-3" label="" icon={undefined}/></td>
                                         <td className="px-1 py-1"><Input type="number" value={item.currentQuantity === 0 ? '' : item.currentQuantity} onChange={e => handleItemFieldChange(item.id, 'currentQuantity', e.target.value)} placeholder="०" className="text-center !pl-3" label="" icon={undefined}/></td>
@@ -780,7 +793,6 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
 
   const storeOptions: Option[] = useMemo(() => stores.map(s => ({ id: s.id, value: s.id, label: s.name })), [stores]);
 
-  // Counts for summary
   const expendableCount = useMemo(() => inventoryItems.filter(i => i.itemType === 'Expendable').length, [inventoryItems]);
   const nonExpendableCount = useMemo(() => inventoryItems.filter(i => i.itemType === 'Non-Expendable').length, [inventoryItems]);
 
@@ -838,7 +850,6 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
         </div>
       </div>
 
-      {/* NEW: QUICK VIEW TABS (Expendable / Non-Expendable / All) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button 
               onClick={() => setFilterType('')}
