@@ -8,7 +8,7 @@ import { RabiesPatient } from '../types';
 
 interface RabiesReportProps {
   currentFiscalYear: string;
-  currentUser: { organizationName: string; fullName: string; };
+  currentUser: { organizationName: string; fullName: string; designation: string; };
   patients: RabiesPatient[];
 }
 
@@ -150,7 +150,8 @@ export const RabiesReport: React.FC<RabiesReportProps> = ({ currentFiscalYear, c
         <div className="mt-12 grid grid-cols-2 gap-20 print:mt-10 print:gap-10">
             <div className="text-center">
                 <div className="border-t border-slate-800 pt-2 font-bold">Prepared By</div>
-                <div className="text-xs print:text-[10px]">{currentUser.fullName}</div>
+                <div className="text-xs print:text-[10px] font-bold">{currentUser.fullName}</div>
+                <div className="text-[10px] print:text-[8px] text-slate-500 uppercase font-bold tracking-wider">{currentUser.designation}</div>
             </div>
             <div className="text-center">
                 <div className="border-t border-slate-800 pt-2 font-bold">Approved By</div>
