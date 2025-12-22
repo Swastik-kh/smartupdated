@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Trash2, Printer, Save, Calendar, CheckCircle2, Send, Clock, FileText, Eye, Search, X, AlertCircle, ChevronRight, ArrowLeft, Check, Square, Warehouse, Layers, ShieldCheck } from 'lucide-react';
+import { Plus, Trash2, Printer, Save, Calendar, CheckCircle2, Send, Clock, FileText, Eye, Search, X, AlertCircle, ChevronRight, ArrowLeft, Check, Square, Warehouse, Layers, ShieldCheck, Building2 } from 'lucide-react';
 import { User, MagItem, MagFormEntry, InventoryItem, Option, Store, OrganizationSettings } from '../types';
 import { SearchableSelect } from './SearchableSelect';
 import { Select } from './Select';
@@ -21,12 +21,14 @@ interface MagFaramProps {
   inventoryItems: InventoryItem[];
   stores?: Store[];
   generalSettings: OrganizationSettings;
+  allUsers?: User[]; // Added to get all available orgs
 }
 
-export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUser, existingForms, onSave, inventoryItems, generalSettings, stores = [] }) => {
+export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUser, existingForms, onSave, inventoryItems, generalSettings, stores = [], allUsers = [] }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isViewOnly, setIsViewOnly] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [isInstitutionalMode, setIsInstitutionalMode] = useState(false);
   
   // Rejection States
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -39,11 +41,22 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
       itemType: '' as 'Expendable' | 'Non-Expendable' | ''
   });
 
+  const availableOrgs = useMemo(() => {
+    const orgs = Array.from(new Set(allUsers.map(u => u.organizationName))).filter(o => o !== currentUser.organizationName);
+    return orgs.map(o => ({ id: o, value: o, label: o }));
+  }, [allUsers, currentUser.organizationName]);
+
   const generateMagFormNo = (forms: MagFormEntry[], fy: string) => {
-    const fyForms = forms.filter(f => f.fiscalYear === fy);
-    if (fyForms.length === 0) return "0001-MF";
+    // CRITICAL: Only filter forms where this organization is the SOURCE.
+    // Received institutional forms from other orgs should NOT affect this org's sequence.
+    const mySourceForms = forms.filter(f => 
+        f.fiscalYear === fy && 
+        (f.sourceOrg === currentUser.organizationName || !f.sourceOrg)
+    );
+
+    if (mySourceForms.length === 0) return "0001-MF";
     
-    const maxNo = fyForms.reduce((max, f) => {
+    const maxNo = mySourceForms.reduce((max, f) => {
         let val = 0;
         if (typeof f.formNo === 'string') {
             const parts = f.formNo.split('-');
@@ -80,7 +93,10 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
     receiver: { name: '', designation: '', date: '' }, 
     ledgerEntry: { name: '', date: '' },
     approvedBy: { name: '', designation: '', date: '' },
-    isViewedByRequester: true
+    isViewedByRequester: true,
+    isInstitutional: false,
+    targetOrg: '',
+    sourceOrg: currentUser.organizationName
   });
 
   useEffect(() => {
@@ -119,14 +135,14 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
   }, [existingForms, currentUser.role]);
 
   const historyForms = useMemo(() => {
-      const myForms = existingForms.filter(f => f.demandBy?.name === currentUser.fullName);
+      const myForms = existingForms.filter(f => f.sourceOrg === currentUser.organizationName);
       // History shows official records (Approved/Rejected) for all administrative roles
       const officialHistory = (isAdminOrApproval || isStrictStoreKeeper)
           ? existingForms.filter(f => f.status === 'Approved' || f.status === 'Rejected')
           : [];
       const combined = [...new Map([...myForms, ...officialHistory].map(item => [item.id, item])).values()];
       return combined.sort((a, b) => b.id.localeCompare(a.id));
-  }, [existingForms, isAdminOrApproval, isStrictStoreKeeper, currentUser.fullName]);
+  }, [existingForms, isAdminOrApproval, isStrictStoreKeeper, currentUser.organizationName]);
 
   const itemOptions = useMemo(() => inventoryItems.map(item => {
     const typeLabel = item.itemType === 'Expendable' ? 'खर्च हुने' : 'खर्च नहुने';
@@ -196,12 +212,13 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
   const handleLoadForm = (form: MagFormEntry, viewOnly: boolean = false) => {
       setEditingId(form.id);
       setIsViewOnly(viewOnly);
+      setIsInstitutionalMode(!!form.isInstitutional);
       setItems(form.items.map(item => {
           const matched = inventoryItems.some(i => i.itemName === item.name);
           return { ...item, isFromInventory: matched };
       }));
       
-      if (viewOnly && form.isViewedByRequester === false && form.demandBy?.name === currentUser.fullName) {
+      if (viewOnly && form.isViewedByRequester === false && form.sourceOrg === currentUser.organizationName) {
           const updatedForm = { ...form, isViewedByRequester: true };
           onSave(updatedForm);
           setFormDetails(updatedForm);
@@ -216,6 +233,7 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
     setValidationError(null);
     if (!formDetails.date) { setValidationError("कृपया मिति भर्नुहोस्।"); return; }
     if (!formDetails.demandBy?.purpose) { setValidationError("कृपया प्रयोजन भर्नुहोस्।"); return; }
+    if (isInstitutionalMode && !formDetails.targetOrg) { setValidationError("कृपया माग गर्ने संस्था छान्नुहोस्।"); return; }
 
     const validItems = items.filter(item => item.name && item.name.trim() !== '');
     if (validItems.length === 0) { setValidationError("कृपया कम्तिमा एउटा सामानको नाम भर्नुहोस्।"); return; }
@@ -237,12 +255,34 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
           return;
       }
       
+      let updatedStoreKeeper = { ...formDetails.storeKeeper };
+      let updatedApprovedBy = { ...formDetails.approvedBy };
+
+      // Hide specific name and show "REJECTED" based on who is rejecting
+      if (isVerifying) {
+          updatedStoreKeeper.name = "अस्वीकृत (REJECTED)";
+      } else if (isApproving) {
+          updatedApprovedBy = {
+              name: "अस्वीकृत (REJECTED)",
+              designation: "Office Head",
+              date: todayBS
+          };
+      } else {
+          // General fallback
+          updatedApprovedBy = {
+              name: "अस्वीकृत (REJECTED)",
+              designation: "",
+              date: todayBS
+          };
+      }
+
       const newForm: MagFormEntry = {
           ...formDetails,
           status: 'Rejected',
           rejectionReason: rejectReason,
           isViewedByRequester: false, // Notify requester
-          approvedBy: { name: currentUser.fullName, designation: currentUser.designation, date: todayBS }
+          storeKeeper: updatedStoreKeeper,
+          approvedBy: updatedApprovedBy
       };
       
       onSave(newForm);
@@ -288,7 +328,9 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
         isViewedByRequester: nextIsViewed,
         storeKeeper: updatedStoreKeeper,
         approvedBy: updatedApprovedBy,
-        rejectionReason: "" 
+        rejectionReason: "",
+        isInstitutional: isInstitutionalMode,
+        sourceOrg: formDetails.sourceOrg || currentUser.organizationName
     };
 
     const finalStoreId = extraData?.storeId || formDetails.selectedStoreId || '';
@@ -298,7 +340,7 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
     if (finalItemType) newForm.issueItemType = finalItemType as any;
 
     onSave(newForm);
-    alert("माग फारम सुरक्षित भयो।");
+    alert(isInstitutionalMode ? `माग फारम सुरक्षित भयो र ${newForm.targetOrg} को जिन्सी शाखामा पठाइयो।` : "माग फारम सुरक्षित भयो।");
     setShowVerifyPopup(false);
     handleReset();
   };
@@ -306,6 +348,7 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
   const handleReset = () => {
     setEditingId(null);
     setIsViewOnly(false);
+    setIsInstitutionalMode(false);
     setValidationError(null);
     setShowVerifyPopup(false);
     setShowRejectModal(false);
@@ -322,7 +365,10 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
         receiver: { name: '', designation: '', date: '' }, 
         ledgerEntry: { name: '', date: '' },
         approvedBy: { name: '', designation: '', date: '' },
-        isViewedByRequester: true
+        isViewedByRequester: true,
+        isInstitutional: false,
+        targetOrg: '',
+        sourceOrg: currentUser.organizationName
     });
   };
 
@@ -337,9 +383,14 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                     <h2 className="text-xl font-bold text-slate-800 font-nepali">माग फारम व्यवस्थापन (Mag Faram)</h2>
                     <p className="text-sm text-slate-500 font-nepali">म.ले.प. फारम नं ४०१ अनुसारको माग फारम</p>
                 </div>
-                <button onClick={() => setEditingId('new')} className="bg-primary-600 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 shadow-lg hover:bg-primary-700 transition-all font-bold font-nepali">
-                    <Plus size={20} /> नयाँ माग फारम थप्नुहोस्
-                </button>
+                <div className="flex gap-3">
+                    <button onClick={() => { setEditingId('new'); setIsInstitutionalMode(true); }} className="bg-emerald-600 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 shadow-lg hover:bg-emerald-700 transition-all font-bold font-nepali">
+                        <Building2 size={20} /> संस्थागत माग फारम
+                    </button>
+                    <button onClick={() => { setEditingId('new'); setIsInstitutionalMode(false); }} className="bg-primary-600 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 shadow-lg hover:bg-primary-700 transition-all font-bold font-nepali">
+                        <Plus size={20} /> नयाँ माग फारम थप्नुहोस्
+                    </button>
+                </div>
             </div>
 
             {actionableForms.length > 0 && (
@@ -352,13 +403,14 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                     </div>
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 text-slate-600 font-medium">
-                            <tr><th className="px-6 py-3">Form No</th><th className="px-6 py-3">Requested By</th><th className="px-6 py-3">Date</th><th className="px-6 py-3 text-right">Action</th></tr>
+                            <tr><th className="px-6 py-3">Form No</th><th className="px-6 py-3">Requested By</th><th className="px-6 py-3">Source Org</th><th className="px-6 py-3">Date</th><th className="px-6 py-3 text-right">Action</th></tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {actionableForms.map(f => (
                                 <tr key={f.id} className="hover:bg-slate-50/50 transition-colors">
                                     <td className="px-6 py-4 font-mono font-bold text-slate-700">#{f.formNo}</td>
                                     <td className="px-6 py-4">{f.demandBy?.name}</td>
+                                    <td className="px-6 py-4 text-xs font-bold text-indigo-600">{f.sourceOrg || 'Internal'}</td>
                                     <td className="px-6 py-4 font-nepali">{f.date}</td>
                                     <td className="px-6 py-4 text-right">
                                         <button onClick={() => handleLoadForm(f)} className="text-primary-600 font-bold hover:underline bg-primary-50 px-3 py-1.5 rounded-lg">
@@ -376,15 +428,16 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                 <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 text-slate-700 font-bold font-nepali flex items-center gap-2"><FileText size={18} /> फारम इतिहास (History)</div>
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-slate-500 font-medium">
-                        <tr><th className="px-6 py-3">Form No</th><th className="px-6 py-3">Date</th><th className="px-6 py-3">Status</th><th className="px-6 py-3 text-right">Action</th></tr>
+                        <tr><th className="px-6 py-3">Form No</th><th className="px-6 py-3">Date</th><th className="px-6 py-3">Target</th><th className="px-6 py-3">Status</th><th className="px-6 py-3 text-right">Action</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {historyForms.map(f => {
-                            const isNewUpdate = f.isViewedByRequester === false && f.demandBy?.name === currentUser.fullName;
+                            const isNewUpdate = f.isViewedByRequester === false && f.sourceOrg === currentUser.organizationName;
                             return (
                                 <tr key={f.id} className={`hover:bg-slate-50 ${isNewUpdate ? 'bg-primary-50/30' : ''}`}>
                                     <td className="px-6 py-3 font-mono font-bold">#{f.formNo}</td>
                                     <td className="px-6 py-3 font-nepali">{f.date}</td>
+                                    <td className="px-6 py-3 text-xs">{f.targetOrg || 'Internal Store'}</td>
                                     <td className="px-6 py-3">
                                         <div className="flex items-center gap-2">
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
@@ -412,7 +465,7 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                             );
                         })}
                         {historyForms.length === 0 && (
-                            <tr><td colSpan={4} className="px-6 py-8 text-center text-slate-400 italic">कुनै माग फारम भेटिएन।</td></tr>
+                            <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-400 italic">कुनै माग फारम भेटिएन।</td></tr>
                         )}
                     </tbody>
                 </table>
@@ -426,7 +479,7 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm no-print">
           <div className="flex items-center gap-3">
               <button onClick={handleReset} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"><ArrowLeft size={20} /></button>
-              <h2 className="font-bold text-slate-700 font-nepali text-lg">{isViewOnly ? 'माग फारम प्रिभ्यु' : 'माग फारम भर्नुहोस्'}</h2>
+              <h2 className="font-bold text-slate-700 font-nepali text-lg">{isViewOnly ? 'माग फारम प्रिभ्यु' : isInstitutionalMode ? 'संस्थागत माग फारम भर्नुहोस्' : 'माग फारम भर्नुहोस्'}</h2>
           </div>
           <div className="flex gap-2">
             {!isViewOnly && (
@@ -437,7 +490,7 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                         </button>
                     )}
                     <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium shadow-sm">
-                        <Save size={18} /> {isVerifying ? 'प्रमाणित गर्नुहोस्' : isApproving ? 'स्वीकृत गर्नुहोस्' : 'सुरक्षित गर्नुहोस्'}
+                        <Save size={18} /> {isVerifying ? 'प्रमाणित गर्नुहोस्' : isApproving ? 'स्वीकृत गर्नुहोस्' : isInstitutionalMode ? 'माग पठाउनुहोस्' : 'सुरक्षित गर्नुहोस्'}
                     </button>
                 </>
             )}
@@ -456,18 +509,6 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                 </div>
                 <button onClick={() => setValidationError(null)} className="text-red-400 hover:text-red-600"><X size={20} /></button>
             </div>
-       )}
-
-       {formDetails.status === 'Rejected' && formDetails.rejectionReason && (
-           <div className="bg-red-600 text-white p-4 rounded-xl shadow-lg max-w-[210mm] mx-auto flex items-start gap-4 mb-4 no-print border-2 border-red-700">
-               <div className="bg-white/20 p-2 rounded-lg"><AlertCircle size={24}/></div>
-               <div>
-                   <h3 className="font-bold text-lg font-nepali uppercase tracking-wider">अस्वीकृत गरिएको माग (Rejected Demand)</h3>
-                   <p className="font-nepali text-sm mt-1 bg-black/10 p-2 rounded border border-white/10 italic">
-                       कारण: {formDetails.rejectionReason}
-                   </p>
-               </div>
-           </div>
        )}
 
        <div id="mag-form-print" className="bg-white p-6 md:p-10 max-w-[210mm] mx-auto min-h-[297mm] font-nepali text-slate-900 print:p-0 print:shadow-none print:w-full border shadow-lg rounded-xl">
@@ -491,8 +532,27 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
               </div>
           </div>
 
-          <div className="flex justify-end text-sm mb-4">
-              <div className="space-y-1 w-44">
+          <div className="flex justify-between items-start mb-4 text-sm">
+              <div className="flex-1">
+                {isInstitutionalMode && (
+                    <div className="max-w-xs space-y-2">
+                        <label className="font-bold text-primary-700 block">सामान माग गर्ने संस्था (Target Institution):</label>
+                        {isViewOnly ? (
+                            <p className="font-bold text-slate-800 bg-slate-50 px-2 py-1 rounded border border-slate-200">{formDetails.targetOrg}</p>
+                        ) : (
+                            <Select 
+                                options={availableOrgs}
+                                value={formDetails.targetOrg || ''}
+                                onChange={e => setFormDetails({...formDetails, targetOrg: e.target.value})}
+                                label=""
+                                placeholder="संस्था छान्नुहोस्..."
+                                className="!h-10 !bg-indigo-50 !border-indigo-200 !text-indigo-900 font-bold"
+                            />
+                        )}
+                    </div>
+                )}
+              </div>
+              <div className="space-y-1 w-44 shrink-0">
                   <div className="flex justify-between items-center">
                       <span className="font-bold">आर्थिक वर्ष :</span>
                       <span className="font-bold border-b border-dotted border-slate-800 px-1">{currentFiscalYear}</span>
@@ -642,7 +702,15 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                   </div>
                   <div className="space-y-1">
                       <div className="mb-2">स्टोरकिपरको दस्तखत:.......</div>
-                      <div className="flex gap-1"><span>नाम:</span><input value={formDetails.storeKeeper?.name} onChange={e => setFormDetails({...formDetails, storeKeeper: {...formDetails.storeKeeper!, name: e.target.value}})} className={isViewOnly || !isVerifying ? inputReadOnlyClass : inputEditableClass} disabled={isViewOnly || !isVerifying}/></div>
+                      <div className="flex gap-1">
+                          <span>नाम:</span>
+                          <input 
+                            value={formDetails.storeKeeper?.name} 
+                            onChange={e => setFormDetails({...formDetails, storeKeeper: {...formDetails.storeKeeper!, name: e.target.value}})} 
+                            className={`${isViewOnly || !isVerifying ? inputReadOnlyClass : inputEditableClass} ${formDetails.storeKeeper?.name?.includes('REJECTED') ? 'text-red-600 font-bold' : ''}`} 
+                            disabled={isViewOnly || !isVerifying}
+                          />
+                      </div>
                   </div>
               </div>
 
@@ -667,7 +735,15 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
               <div className="col-span-4 pl-4">
                   <div className="font-bold mb-4">स्वीकृत गर्ने:.......</div>
                   <div className="space-y-1">
-                      <div className="flex gap-1"><span>नाम:</span><input value={formDetails.approvedBy?.name} onChange={e => setFormDetails({...formDetails, approvedBy: {...formDetails.approvedBy!, name: e.target.value}})} className={isViewOnly || !isApproving ? inputReadOnlyClass : inputEditableClass} disabled={isViewOnly || !isApproving}/></div>
+                      <div className="flex gap-1">
+                          <span>नाम:</span>
+                          <input 
+                            value={formDetails.approvedBy?.name} 
+                            onChange={e => setFormDetails({...formDetails, approvedBy: {...formDetails.approvedBy!, name: e.target.value}})} 
+                            className={`${isViewOnly || !isApproving ? inputReadOnlyClass : inputEditableClass} ${formDetails.approvedBy?.name?.includes('REJECTED') ? 'text-red-600 font-bold' : ''}`} 
+                            disabled={isViewOnly || !isApproving}
+                          />
+                      </div>
                       <div className="flex gap-1"><span>पद:</span><input value={formDetails.approvedBy?.designation} onChange={e => setFormDetails({...formDetails, approvedBy: {...formDetails.approvedBy!, designation: e.target.value}})} className={isViewOnly || !isApproving ? inputReadOnlyClass : inputEditableClass} disabled={isViewOnly || !isApproving}/></div>
                       <div className="flex gap-1"><span>मिति:</span><input value={formDetails.approvedBy?.date} onChange={e => setFormDetails({...formDetails, approvedBy: {...formDetails.approvedBy!, date: e.target.value}})} className={isViewOnly || !isApproving ? inputReadOnlyClass : inputEditableClass} disabled={isViewOnly || !isApproving}/></div>
                   </div>
@@ -678,7 +754,7 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
        {/* REJECTION REASON MODAL */}
        {showRejectModal && (
            <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-               <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity" onClick={() => setShowRejectModal(false)}></div>
+               <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setShowRejectModal(false)}></div>
                <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200">
                     <div className="px-6 py-4 border-b bg-red-600 text-white flex justify-between items-center">
                         <div className="flex items-center gap-2">

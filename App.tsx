@@ -153,21 +153,17 @@ const App: React.FC = () => {
         const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
         const orgPath = `orgData/${safeOrgName}`;
         
-        // 1. Get previous state to check for transition to 'Approved'
         const existingSnap = await get(ref(db, `${orgPath}/returnEntries/${entry.id}`));
         const prevStatus = existingSnap.exists() ? existingSnap.val().status : null;
         
         const updates: Record<string, any> = {};
 
-        // 2. Logic to add stock if status is newly 'Approved'
         if (entry.status === 'Approved' && prevStatus !== 'Approved') {
             const invSnap = await get(ref(db, `${orgPath}/inventory`));
             const inventory: Record<string, InventoryItem> = invSnap.exists() ? invSnap.val() : {};
             const invList = Object.keys(inventory).map(k => ({ ...inventory[k], id: k }));
 
             for (const retItem of entry.items) {
-                // Find matching item in inventory
-                // We match by name and potentially code/sanket if provided
                 const matchingItem = invList.find(i => 
                     i.itemName.trim().toLowerCase() === retItem.name.trim().toLowerCase()
                 );
@@ -199,29 +195,41 @@ const App: React.FC = () => {
     }
   };
 
-  const filteredUsersForDashboard = allUsers.filter(u => {
-      if (currentUser?.role === 'SUPER_ADMIN') return true;
-      return u.organizationName === currentUser?.organizationName;
-  });
-
   const handleSaveMagForm = async (f: MagFormEntry) => {
       if (!currentUser) return;
       try {
-          const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
-          const orgPath = `orgData/${safeOrgName}`;
-          
           const updates: Record<string, any> = {};
-          updates[`${orgPath}/magForms/${f.id}`] = f;
+          
+          // Ensure sourceOrg is always set to maintain individual organization sequences
+          const formToSave = {
+              ...f,
+              sourceOrg: f.sourceOrg || currentUser.organizationName
+          };
 
-          if (f.status === 'Approved') {
-              if (f.storeKeeper?.status === 'market') {
-                  const poId = `PO-${f.id}`;
+          const sourceSafeName = formToSave.sourceOrg.trim().replace(/[.#$[\]]/g, "_");
+          const targetSafeName = formToSave.targetOrg?.trim().replace(/[.#$[\]]/g, "_");
+
+          // Always save to the source organization (the one who requested)
+          updates[`orgData/${sourceSafeName}/magForms/${formToSave.id}`] = formToSave;
+
+          // If Institutional, also save to target organization (the one fulfilling)
+          if (formToSave.isInstitutional && targetSafeName) {
+            updates[`orgData/${targetSafeName}/magForms/${formToSave.id}`] = formToSave;
+          }
+
+          if (formToSave.status === 'Approved') {
+              // Workflow automation logic (creating PO or Issue Report)
+              const currentSafeOrg = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
+              const orgPath = `orgData/${currentSafeOrg}`;
+
+              if (formToSave.storeKeeper?.status === 'market') {
+                  const poId = `PO-${formToSave.id}`;
                   const poPath = `${orgPath}/purchaseOrders/${poId}`;
                   const poSnap = await get(ref(db, poPath));
                   if (!poSnap.exists()) {
                       const ordersSnap = await get(ref(db, `${orgPath}/purchaseOrders`));
                       const allOrders: PurchaseOrderEntry[] = ordersSnap.exists() ? Object.values(ordersSnap.val()) : [];
-                      const fyOrders = allOrders.filter(o => o.fiscalYear === f.fiscalYear && o.orderNo);
+                      const fyOrders = allOrders.filter(o => o.fiscalYear === formToSave.fiscalYear && o.orderNo);
                       const maxNo = fyOrders.reduce((max, o) => {
                           const parts = o.orderNo?.split('-');
                           const val = parts ? parseInt(parts[0]) : 0;
@@ -230,13 +238,13 @@ const App: React.FC = () => {
                       const nextOrderNo = `${String(maxNo + 1).padStart(4, '0')}-KH`;
                       const newPO: PurchaseOrderEntry = {
                           id: poId,
-                          magFormId: f.id,
-                          magFormNo: f.formNo,
-                          requestDate: f.date,
-                          items: f.items,
+                          magFormId: formToSave.id,
+                          magFormNo: formToSave.formNo,
+                          requestDate: formToSave.date,
+                          items: formToSave.items,
                           status: 'Pending',
                           orderNo: nextOrderNo,
-                          fiscalYear: f.fiscalYear,
+                          fiscalYear: formToSave.fiscalYear,
                           preparedBy: { name: '', designation: '', date: '' },
                           recommendedBy: { name: '', designation: '', date: '' },
                           financeBy: { name: '', designation: '', date: '' },
@@ -245,22 +253,22 @@ const App: React.FC = () => {
                       updates[poPath] = newPO;
                   }
               }
-              else if (f.storeKeeper?.status === 'stock') {
-                  const irId = `IR-${f.id}`;
+              else if (formToSave.storeKeeper?.status === 'stock') {
+                  const irId = `IR-${formToSave.id}`;
                   const irPath = `${orgPath}/issueReports/${irId}`;
                   const irSnap = await get(ref(db, irPath));
                   if (!irSnap.exists()) {
                       const newIR: IssueReportEntry = {
                           id: irId,
-                          magFormId: f.id,
-                          magFormNo: f.formNo,
-                          requestDate: f.date,
-                          items: f.items,
+                          magFormId: formToSave.id,
+                          magFormNo: formToSave.formNo,
+                          requestDate: formToSave.date,
+                          items: formToSave.items,
                           status: 'Pending',
-                          fiscalYear: f.fiscalYear,
-                          itemType: f.issueItemType || 'Expendable',
-                          storeId: f.selectedStoreId, 
-                          demandBy: f.demandBy,
+                          fiscalYear: formToSave.fiscalYear,
+                          itemType: formToSave.issueItemType || 'Expendable',
+                          storeId: formToSave.selectedStoreId, 
+                          demandBy: formToSave.demandBy,
                           preparedBy: { name: '', designation: '', date: '' },
                           recommendedBy: { name: '', designation: '', date: '' },
                           approvedBy: { name: '', designation: '', date: '' }
@@ -271,7 +279,7 @@ const App: React.FC = () => {
           }
           await update(ref(db), updates);
       } catch (error) {
-          console.error("Error saving Mag Form workflow:", error);
+          console.error("Error saving Mag Form sync:", error);
           alert("माग फारम सुरक्षित गर्दा समस्या आयो।");
       }
   };
@@ -365,7 +373,12 @@ const App: React.FC = () => {
             report.items = updatedReportItems;
 
             if (linkedMagForm) {
-                updates[`${orgPath}/magForms/${report.magFormId}`] = linkedMagForm;
+                // IMPORTANT: If Mag Form is synced, we must update it in both places too
+                const sourceSafeName = linkedMagForm.sourceOrg?.trim().replace(/[.#$[\]]/g, "_");
+                const targetSafeName = linkedMagForm.targetOrg?.trim().replace(/[.#$[\]]/g, "_");
+
+                if (sourceSafeName) updates[`orgData/${sourceSafeName}/magForms/${linkedMagForm.id}`] = linkedMagForm;
+                if (targetSafeName) updates[`orgData/${targetSafeName}/magForms/${linkedMagForm.id}`] = linkedMagForm;
             }
         }
 
@@ -484,7 +497,7 @@ const App: React.FC = () => {
           onLogout={() => setCurrentUser(null)} 
           currentUser={currentUser}
           currentFiscalYear={currentFiscalYear} 
-          users={filteredUsersForDashboard}
+          users={allUsers}
           onAddUser={(u) => set(ref(db, `users/${u.id}`), u)}
           onUpdateUser={(u) => set(ref(db, `users/${u.id}`), u)}
           onDeleteUser={(id) => remove(ref(db, `users/${id}`))}

@@ -125,7 +125,10 @@ export interface MagFormEntry {
   rejectionReason?: string; 
   selectedStoreId?: string; 
   issueItemType?: 'Expendable' | 'Non-Expendable';
-  isViewedByRequester?: boolean; 
+  isViewedByRequester?: boolean;
+  isInstitutional?: boolean;
+  targetOrg?: string;
+  sourceOrg?: string;
 }
 
 export interface PurchaseOrderEntry {
