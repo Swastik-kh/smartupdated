@@ -52,14 +52,10 @@ export const RabiesReport: React.FC<RabiesReportProps> = ({ currentFiscalYear, c
     filteredData.forEach(p => {
         let rowIndex = -1;
         const ageNum = parseInt(p.age) || 0;
-        if (p.sex === 'Male') {
-            rowIndex = ageNum < 15 ? 2 : 0;
-        } else if (p.sex === 'Female') {
-            rowIndex = ageNum < 15 ? 3 : 1;
-        }
+        if (p.sex === 'Male') rowIndex = ageNum < 15 ? 2 : 0;
+        else if (p.sex === 'Female') rowIndex = ageNum < 15 ? 3 : 1;
 
         let colIndex = -1;
-        // Updated mapping to match exactly with the new values from registration
         switch(p.animalType) {
             case 'Dog bite': colIndex = 0; break;
             case 'Monkey bite': colIndex = 1; break;
@@ -73,9 +69,7 @@ export const RabiesReport: React.FC<RabiesReportProps> = ({ currentFiscalYear, c
             default: colIndex = 9;
         }
 
-        if (rowIndex !== -1 && colIndex !== -1) {
-            mat[rowIndex][colIndex]++;
-        }
+        if (rowIndex !== -1 && colIndex !== -1) mat[rowIndex][colIndex]++;
     });
     return mat;
   }, [patients, selectedFiscalYear, selectedMonth]);
@@ -87,7 +81,7 @@ export const RabiesReport: React.FC<RabiesReportProps> = ({ currentFiscalYear, c
   const balanceDose = stockData.opening + stockData.received - stockData.expenditure;
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 print:space-y-0 print:animate-none">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm no-print">
          <div className="flex items-end gap-4 w-full md:w-auto">
              <div className="w-48">
@@ -100,21 +94,22 @@ export const RabiesReport: React.FC<RabiesReportProps> = ({ currentFiscalYear, c
          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg font-medium shadow-sm"><Printer size={18} /> Print</button>
       </div>
 
-      <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-lg overflow-x-auto min-w-[1000px]">
-        <div className="text-center space-y-1 mb-6 font-bold text-slate-900">
+      {/* Main Printable Area */}
+      <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-lg overflow-x-auto min-w-[1000px] print:min-w-full print:shadow-none print:border-none print:p-0 print:overflow-visible">
+        <div className="text-center space-y-1 mb-6 font-bold text-slate-900 print:mb-4">
             <h4 className="text-sm uppercase">NG/MOH</h4>
             <h3 className="text-base uppercase">EPIDEMIOLOGY AND DISEASE CONTROL DIVISION</h3>
             <h2 className="text-lg uppercase">MONTHLY RECORDS OF POST EXPOSURE TREATMENT OF RABIES IN HUMANS</h2>
-            <div className="flex justify-between items-center mt-6 pt-4 px-4 text-sm">
+            <div className="flex justify-between items-center mt-6 pt-4 px-4 text-sm print:mt-4 print:text-[10px]">
                 <span>Institution: <span className="font-medium underline">{currentUser.organizationName}</span></span>
                 <span>Month: <span className="font-medium underline">{nepaliMonthOptions.find(m => m.value === selectedMonth)?.label}</span></span>
                 <span>Year: <span className="font-medium underline">{selectedFiscalYear}</span></span>
             </div>
         </div>
 
-        <table className="w-full text-xs border-collapse border border-slate-800 text-center">
+        <table className="w-full text-xs border-collapse border border-slate-800 text-center print:text-[9px]">
             <thead>
-                <tr className="bg-slate-100 font-bold">
+                <tr className="bg-slate-100 font-bold print:bg-transparent">
                     <th className="border border-slate-800 p-1" rowSpan={2}>Description</th>
                     <th className="border border-slate-800 p-1" colSpan={10}>Source of Exposure</th>
                     <th className="border border-slate-800 p-1" rowSpan={2}>Total</th>
@@ -123,7 +118,7 @@ export const RabiesReport: React.FC<RabiesReportProps> = ({ currentFiscalYear, c
                     <th className="border border-slate-800 p-1" rowSpan={2}>Doses Used</th>
                     <th className="border border-slate-800 p-1" rowSpan={2}>Remaining</th>
                 </tr>
-                <tr>
+                <tr className="bg-slate-100 font-bold print:bg-transparent">
                     {animals.map((a, i) => <th key={i} className="border border-slate-800 p-1">{a}</th>)}
                 </tr>
             </thead>
@@ -132,14 +127,14 @@ export const RabiesReport: React.FC<RabiesReportProps> = ({ currentFiscalYear, c
                     <tr key={rIndex}>
                         <td className="border border-slate-800 p-1 text-left font-bold">{label}</td>
                         {generatedMatrix[rIndex].map((val, cIndex) => <td key={cIndex} className="border border-slate-800">{val || '-'}</td>)}
-                        <td className="border border-slate-800 font-bold bg-slate-50">{getRowTotal(rIndex)}</td>
-                        <td className="border border-slate-800 bg-slate-100"></td>
-                        <td className="border border-slate-800 bg-slate-100"></td>
-                        <td className="border border-slate-800 bg-slate-100"></td>
-                        <td className="border border-slate-800 bg-slate-100"></td>
+                        <td className="border border-slate-800 font-bold bg-slate-50 print:bg-transparent">{getRowTotal(rIndex)}</td>
+                        <td className="border border-slate-800"></td>
+                        <td className="border border-slate-800"></td>
+                        <td className="border border-slate-800"></td>
+                        <td className="border border-slate-800"></td>
                     </tr>
                 ))}
-                <tr className="font-bold bg-slate-100">
+                <tr className="font-bold bg-slate-100 print:bg-transparent">
                     <td className="border border-slate-800 p-1 text-left">TOTAL</td>
                     {animals.map((_, i) => <td key={i} className="border border-slate-800">{getColTotal(i)}</td>)}
                     <td className="border border-slate-800">{grandTotalCases}</td>
@@ -151,14 +146,14 @@ export const RabiesReport: React.FC<RabiesReportProps> = ({ currentFiscalYear, c
             </tbody>
         </table>
 
-        <div className="mt-12 grid grid-cols-2 gap-20">
+        <div className="mt-12 grid grid-cols-2 gap-20 print:mt-10 print:gap-10">
             <div className="text-center">
                 <div className="border-t border-slate-800 pt-2 font-bold">Prepared By</div>
-                <div className="text-xs">{currentUser.fullName}</div>
+                <div className="text-xs print:text-[10px]">{currentUser.fullName}</div>
             </div>
             <div className="text-center">
                 <div className="border-t border-slate-800 pt-2 font-bold">Approved By</div>
-                <div className="text-xs">Medical Officer / In-Charge</div>
+                <div className="text-xs print:text-[10px]">Medical Officer / In-Charge</div>
             </div>
         </div>
       </div>

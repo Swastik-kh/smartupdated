@@ -138,8 +138,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const totalDosesExpendedToday = (todayRabies + todayCompleted) * 2;
 
     // 4. FUTURE FORECAST: DAILY VIAL WASTE LOGIC
-    // We need to group all 'Pending' doses by their scheduled DATE.
-    // Logic: A vial opened on Day X cannot be used on Day X+1.
     const futureDailyDoses: Record<string, number> = {};
     let totalPendingFutureFollowups = 0;
 
@@ -147,43 +145,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
         patient.schedule.forEach(dose => {
             if (dose.status === 'Pending') {
                 totalPendingFutureFollowups++;
-                // Group by date
                 const dateKey = dose.date;
-                futureDailyDoses[dateKey] = (futureDailyDoses[dateKey] || 0) + 2; // 2 doses per visit
+                futureDailyDoses[dateKey] = (futureDailyDoses[dateKey] || 0) + 2; 
             }
         });
     });
     
-    // Total doses needed across all future dates
     const totalFutureDosesNeeded = totalPendingFutureFollowups * 2;
 
-    // Calculate Vials needed by summing up daily requirements
-    // 1ml vial = 10 doses
-    // 0.5ml vial = 5 doses
     let totalFutureVials1ml = 0;
     let totalFutureVials05ml = 0;
     
     Object.keys(futureDailyDoses).forEach(date => {
         const dailyDoses = futureDailyDoses[date];
-        
-        // Vials for 1ml (10 doses)
-        const dailyVialsNeeded1ml = Math.ceil(dailyDoses / 10);
-        totalFutureVials1ml += dailyVialsNeeded1ml;
-        
-        // Vials for 0.5ml (5 doses)
-        const dailyVialsNeeded05ml = Math.ceil(dailyDoses / 5);
-        totalFutureVials05ml += dailyVialsNeeded05ml;
+        totalFutureVials1ml += Math.ceil(dailyDoses / 10);
+        totalFutureVials05ml += Math.ceil(dailyDoses / 5);
     });
 
-    // 5. Monthly Stats
     const monthlyRabies = rabiesPatients.filter(p => 
       p.fiscalYear === currentFiscalYear && 
       p.regMonth === currentMonth
     ).length;
-
-    const totalInventory = inventoryItems.length;
-    const pendingMagForms = magForms.filter(f => f.status === 'Pending').length;
-    const pendingStockReq = stockEntryRequests.filter(r => r.status === 'Pending').length;
 
     return { 
       todayRabies, 
@@ -194,11 +176,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
       totalPendingFutureFollowups,
       totalFutureDosesNeeded,
       futureVials1ml: totalFutureVials1ml,
-      futureVials05ml: totalFutureVials05ml, // Sum of daily 0.5ml requirements
+      futureVials05ml: totalFutureVials05ml, 
       monthlyRabies, 
-      totalInventory, 
-      pendingMagForms, 
-      pendingStockReq 
+      totalInventory: inventoryItems.length, 
+      pendingMagForms: magForms.filter(f => f.status === 'Pending').length, 
+      pendingStockReq: stockEntryRequests.filter(r => r.status === 'Pending').length 
     };
   }, [rabiesPatients, currentFiscalYear, inventoryItems, magForms, stockEntryRequests]);
 
@@ -223,509 +205,140 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, [magForms, currentUser.role]);
 
   const allMenuItems: MenuItem[] = [
-    { 
-      id: 'dashboard', 
-      label: 'ड्यासबोर्ड (Dashboard)', 
-      icon: <LayoutDashboard size={20} /> 
-    },
-    { 
-      id: 'services', 
-      label: 'सेवा (Services)', 
-      icon: <Stethoscope size={20} />,
-      subItems: [
-        { id: 'tb_leprosy', label: 'क्षयरोग/कुष्ठरोग (TB/Leprosy)', icon: <Activity size={16} /> },
-        { id: 'rabies', label: 'रेबिज खोप क्लिनिक (Rabies Vaccine)', icon: <Syringe size={16} /> }
-      ]
-    },
-    { 
-      id: 'inventory', 
-      label: 'जिन्सी व्यवस्थापन (Inventory)', 
-      icon: <Package size={20} />,
-      subItems: [
-        { id: 'stock_entry_approval', label: 'स्टक प्रविष्टि अनुरोध (Stock Requests)', icon: <ClipboardCheck size={16} />, badgeCount: pendingStockRequestsCount }, 
-        { id: 'jinshi_maujdat', label: 'जिन्सी मौज्दात (Inventory Stock)', icon: <Warehouse size={16} /> }, 
-        { id: 'form_suchikaran', label: 'फर्म सुचीकरण (Firm Listing)', icon: <ClipboardList size={16} /> },
-        { id: 'quotation', label: 'सामानको कोटेशन (Quotation)', icon: <FileSpreadsheet size={16} /> },
-        { id: 'mag_faram', label: 'माग फारम (Demand Form)', icon: <FilePlus size={16} />, badgeCount: magFaramBadgeCount },
-        { id: 'kharid_adesh', label: 'खरिद आदेश (Purchase Order)', icon: <ShoppingCart size={16} /> },
-        { id: 'nikasha_pratibedan', label: 'निकासा प्रतिवेदन (Issue Report)', icon: <FileOutput size={16} /> },
-        { id: 'sahayak_jinshi_khata', label: 'सहायक जिन्सी खाता (Sub. Ledger)', icon: <BookOpen size={16} /> },
-        { id: 'jinshi_khata', label: 'जिन्सी खाता (Inventory Ledger)', icon: <Book size={16} /> },
-        { id: 'dakhila_pratibedan', label: 'दाखिला प्रतिवेदन (Entry Report)', icon: <Archive size={16} /> },
-        { id: 'jinshi_firta_khata', label: 'जिन्सी फिर्ता खाता (Return Ledger)', icon: <RotateCcw size={16} /> },
-        { id: 'marmat_adesh', label: 'मर्मत आवेदन/आदेश (Maintenance)', icon: <Wrench size={16} /> },
-        { id: 'dhuliyauna_faram', label: 'लिलाम / धुल्याउने (Disposal)', icon: <Trash2 size={16} /> },
-        { id: 'log_book', label: 'लग बुक (Log Book)', icon: <Scroll size={16} /> },
-      ]
-    },
-    { 
-      id: 'report', 
-      label: 'रिपोर्ट (Report)', 
-      icon: <FileText size={20} />,
-      subItems: [
-        { id: 'report_tb_leprosy', label: 'क्षयरोग/कुष्ठरोग रिपोर्ट (TB/Leprosy)', icon: <Activity size={16} /> },
-        { id: 'report_rabies', label: 'रेबिज रिपोर्ट (Rabies Report)', icon: <Syringe size={16} /> },
-        { id: 'report_inventory_monthly', label: 'जिन्सी मासिक प्रतिवेदन (Monthly Report)', icon: <BarChart3 size={16} /> }
-      ]
-    },
-    { 
-      id: 'settings', 
-      label: 'सेटिङ (Settings)', 
-      icon: <Settings size={20} />,
-      subItems: [
-        { id: 'general_setting', label: 'सामान्य सेटिङ (General Setting)', icon: <Sliders size={16} /> },
-        { id: 'store_setup', label: 'स्टोर सेटअप (Store Setup)', icon: <Store size={16} /> }, 
-        { 
-            id: 'prayog_setup', 
-            label: 'प्रयोग सेटअप (Prayog Setup)', 
-            icon: <UserCog size={16} />,
-            subItems: [
-                { id: 'user_management', label: 'प्रयोगकर्ता सेटअप (User Setup)', icon: <Users size={16} /> },
-            ]
-        },
-        { 
-            id: 'security', 
-            label: 'सुरक्षा (Security)', 
-            icon: <ShieldCheck size={16} />,
-            subItems: [
-                { id: 'change_password', label: 'पासवर्ड परिवर्तन (Change Password)', icon: <KeyRound size={16} /> }
-            ]
-        },
-        { id: 'database_management', label: 'डाटाबेस व्यवस्थापन (Database Management)', icon: <Database size={16} /> },
-      ]
-    },
+    { id: 'dashboard', label: 'ड्यासबोर्ड (Dashboard)', icon: <LayoutDashboard size={20} /> },
+    { id: 'services', label: 'सेवा (Services)', icon: <Stethoscope size={20} />, subItems: [{ id: 'tb_leprosy', label: 'क्षयरोग/कुष्ठरोग (TB/Leprosy)', icon: <Activity size={16} /> }, { id: 'rabies', label: 'रेबिज खोप क्लिनिक (Rabies Vaccine)', icon: <Syringe size={16} /> }] },
+    { id: 'inventory', label: 'जिन्सी व्यवस्थापन (Inventory)', icon: <Package size={20} />, subItems: [ { id: 'stock_entry_approval', label: 'स्टक प्रविष्टि अनुरोध (Stock Requests)', icon: <ClipboardCheck size={16} />, badgeCount: pendingStockRequestsCount }, { id: 'jinshi_maujdat', label: 'जिन्सी मौज्दात (Inventory Stock)', icon: <Warehouse size={16} /> }, { id: 'form_suchikaran', label: 'फर्म सुचीकरण (Firm Listing)', icon: <ClipboardList size={16} /> }, { id: 'quotation', label: 'सामानको कोटेशन (Quotation)', icon: <FileSpreadsheet size={16} /> }, { id: 'mag_faram', label: 'माग फारम (Demand Form)', icon: <FilePlus size={16} />, badgeCount: magFaramBadgeCount }, { id: 'kharid_adesh', label: 'खरिद आदेश (Purchase Order)', icon: <ShoppingCart size={16} /> }, { id: 'nikasha_pratibedan', label: 'निकासा प्रतिवेदन (Issue Report)', icon: <FileOutput size={16} /> }, { id: 'sahayak_jinshi_khata', label: 'सहायक जिन्सी खाता (Sub. Ledger)', icon: <BookOpen size={16} /> }, { id: 'jinshi_khata', label: 'जिन्सी खाता (Inventory Ledger)', icon: <Book size={16} /> }, { id: 'dakhila_pratibedan', label: 'दाखिला प्रतिवेदन (Entry Report)', icon: <Archive size={16} /> }, { id: 'jinshi_firta_khata', label: 'जिन्सी फिर्ता खाता (Return Ledger)', icon: <RotateCcw size={16} /> }, { id: 'marmat_adesh', label: 'मर्मत आवेदन/आदेश (Maintenance)', icon: <Wrench size={16} /> }, { id: 'dhuliyauna_faram', label: 'लिलाम / धुल्याउने (Disposal)', icon: <Trash2 size={16} /> }, { id: 'log_book', label: 'लग बुक (Log Book)', icon: <Scroll size={16} /> }] },
+    { id: 'report', label: 'रिपोर्ट (Report)', icon: <FileText size={20} />, subItems: [{ id: 'report_tb_leprosy', label: 'क्षयरोग/कुष्ठरोग रिपोर्ट (TB/Leprosy)', icon: <Activity size={16} /> }, { id: 'report_rabies', label: 'रेबिज रिपोर्ट (Rabies Report)', icon: <Syringe size={16} /> }, { id: 'report_inventory_monthly', label: 'जिन्सी मासिक प्रतिवेदन (Monthly Report)', icon: <BarChart3 size={16} /> }] },
+    { id: 'settings', label: 'सेटिङ (Settings)', icon: <Settings size={20} />, subItems: [{ id: 'general_setting', label: 'सामान्य सेटिङ (General Setting)', icon: <Sliders size={16} /> }, { id: 'store_setup', label: 'स्टोर सेटअप (Store Setup)', icon: <Store size={16} /> }, { id: 'prayog_setup', label: 'प्रयोग सेटअप (Prayog Setup)', icon: <UserCog size={16} />, subItems: [{ id: 'user_management', label: 'प्रयोगकर्ता सेटअप (User Setup)', icon: <Users size={16} /> }] }, { id: 'security', label: 'सुरक्षा (Security)', icon: <ShieldCheck size={16} />, subItems: [{ id: 'change_password', label: 'पासवर्ड परिवर्तन (Change Password)', icon: <KeyRound size={16} /> }] }, { id: 'database_management', label: 'डाटाबेस व्यवस्थापन (Database Management)', icon: <Database size={16} /> }] }
   ];
 
   const menuItems = allMenuItems.reduce<MenuItem[]>((acc, item) => {
-    if (item.id === 'dashboard') {
-      acc.push(item);
-      return acc;
-    }
-
+    if (item.id === 'dashboard') { acc.push(item); return acc; }
     if (item.id === 'settings') {
       const isSuperOrAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
       const allowedSubItems = item.subItems?.filter(subItem => {
         if (subItem.id === 'security') return true; 
-        if (subItem.id === 'store_setup') return isSuperOrAdmin; 
         return isSuperOrAdmin; 
       });
-      if (allowedSubItems && allowedSubItems.length > 0) {
-        acc.push({ ...item, subItems: allowedSubItems });
-      }
+      if (allowedSubItems && allowedSubItems.length > 0) acc.push({ ...item, subItems: allowedSubItems });
       return acc;
     }
-
     const isSuperOrAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
-    if (isSuperOrAdmin) {
-      acc.push(item);
-      return acc;
-    }
-
+    if (isSuperOrAdmin) { acc.push(item); return acc; }
     const allowedMenus = currentUser.allowedMenus || [];
     const isParentAllowed = allowedMenus.includes(item.id);
-
     let filteredSubItems: MenuItem[] = [];
     if (item.subItems) {
-      if (isParentAllowed) {
-        filteredSubItems = item.subItems.filter(subItem => {
-             if (subItem.id === 'stock_entry_approval') {
-                 return ['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role);
-             }
-             return true;
-        });
-      } else {
-        filteredSubItems = item.subItems.filter(subItem => {
-             if (subItem.id === 'stock_entry_approval') {
-                 return ['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role) && allowedMenus.includes(subItem.id);
-             }
-             return allowedMenus.includes(subItem.id)
-        });
-      }
+        filteredSubItems = item.subItems.filter(subItem => isParentAllowed || allowedMenus.includes(subItem.id));
     }
-
     if (isParentAllowed || filteredSubItems.length > 0) {
       const newItem = { ...item };
-      if (filteredSubItems.length > 0) {
-        newItem.subItems = filteredSubItems;
-      }
+      if (filteredSubItems.length > 0) newItem.subItems = filteredSubItems;
       acc.push(newItem);
     }
-    
     return acc;
   }, []);
 
   const handleMenuClick = (item: MenuItem) => {
-    if (item.subItems) {
-      setExpandedMenu(expandedMenu === item.id ? null : item.id);
-    } else {
-      setActiveItem(item.id);
-      setExpandedMenu(null);
-      setExpandedSubMenu(null);
-      setIsSidebarOpen(false); 
-    }
+    if (item.subItems) setExpandedMenu(expandedMenu === item.id ? null : item.id);
+    else { setActiveItem(item.id); setExpandedMenu(null); setExpandedSubMenu(null); setIsSidebarOpen(false); }
   };
 
-  const handleSubItemClick = (subItemId: string) => {
-    setActiveItem(subItemId);
-    setIsSidebarOpen(false); 
-  };
-
-  const handleLevel3Click = (subItemId: string) => {
-    setExpandedSubMenu(expandedSubMenu === subItemId ? null : subItemId);
-  };
-
-  const handleDakhilaFromPo = (po: PurchaseOrderEntry) => {
-      setPendingPoDakhila(po);
-      setActiveItem('jinshi_maujdat');
-  };
+  const handleSubItemClick = (subItemId: string) => { setActiveItem(subItemId); setIsSidebarOpen(false); };
+  const handleLevel3Click = (subItemId: string) => { setExpandedSubMenu(expandedSubMenu === subItemId ? null : subItemId); };
+  const handleDakhilaFromPo = (po: PurchaseOrderEntry) => { setPendingPoDakhila(po); setActiveItem('jinshi_maujdat'); };
 
   const renderContent = () => {
     switch (activeItem) {
-      case 'general_setting':
-        return <GeneralSetting settings={generalSettings} onUpdateSettings={onUpdateGeneralSettings} />;
-      case 'dashboard':
-        return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center gap-3 border-b border-slate-200 pb-4 mb-6">
-                    <div className="bg-primary-100 p-2 rounded-lg text-primary-600">
-                        <LayoutDashboard size={24} />
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-800 font-nepali">मुख्य जानकारी (Dashboard Overview)</h2>
-                        <p className="text-sm text-slate-500">संस्थाको हालको अवस्था र मुख्य तथ्याङ्कहरू</p>
-                    </div>
+      case 'general_setting': return <GeneralSetting settings={generalSettings} onUpdateSettings={onUpdateGeneralSettings} />;
+      case 'dashboard': return (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+            <div className="flex items-center gap-3 border-b border-slate-200 pb-4 mb-6">
+                <div className="bg-primary-100 p-2 rounded-lg text-primary-600"><LayoutDashboard size={24} /></div>
+                <div><h2 className="text-xl font-bold text-slate-800 font-nepali">मुख्य जानकारी (Dashboard Overview)</h2><p className="text-sm text-slate-500">संस्थाको हालको अवस्था र मुख्य तथ्याङ्कहरू</p></div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="flex justify-between items-start mb-4"><div className="bg-indigo-50 p-3 rounded-xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors"><Syringe size={24} /></div><span className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full uppercase">Today's Progress</span></div>
+                    <div className="space-y-3"><div className="flex justify-between items-end"><div><h3 className="text-3xl font-black text-slate-800">{stats.todayRabies}</h3><p className="text-xs font-bold text-slate-400 font-nepali uppercase tracking-wider">नयाँ दर्ता (New)</p></div><div className="text-right"><span className="text-lg font-black text-green-600">{stats.todayCompleted}</span><span className="text-slate-300 mx-1">/</span><span className="text-sm font-bold text-slate-500">{stats.todayScheduled}</span><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">फलोअप (Followups)</p></div></div><div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden"><div className="bg-green-500 h-full transition-all duration-500" style={{ width: `${stats.todayScheduled > 0 ? (stats.todayCompleted / stats.todayScheduled) * 100 : 0}%` }}></div></div><div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-tight"><div className="flex flex-col"><span className="text-green-600">लगाएका: {stats.todayCompleted}</span><span className="text-orange-500 text-[8px]">बाँकी: {stats.todayPending}</span></div><div className="text-right bg-indigo-50 px-2 py-1 rounded border border-indigo-100"><span className="text-indigo-700 block">आज खर्च: <span className="font-black">{stats.totalDosesExpendedToday}</span> <span className="text-[8px]">Doses</span></span></div></div></div>
                 </div>
-
-                {/* Dashboard Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {/* Today's Rabies Patients Progress */}
-                    <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-all group">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                <Syringe size={24} />
-                            </div>
-                            <span className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full uppercase">Today's Progress</span>
-                        </div>
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-end">
-                                <div>
-                                    <h3 className="text-3xl font-black text-slate-800">{stats.todayRabies}</h3>
-                                    <p className="text-xs font-bold text-slate-400 font-nepali uppercase tracking-wider">नयाँ दर्ता (New)</p>
-                                </div>
-                                <div className="text-right">
-                                    <span className="text-lg font-black text-green-600">{stats.todayCompleted}</span>
-                                    <span className="text-slate-300 mx-1">/</span>
-                                    <span className="text-sm font-bold text-slate-500">{stats.todayScheduled}</span>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">फलोअप (Followups)</p>
-                                </div>
-                            </div>
-                            
-                            {/* Simple Progress Bar */}
-                            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                <div 
-                                    className="bg-green-500 h-full transition-all duration-500" 
-                                    style={{ width: `${stats.todayScheduled > 0 ? (stats.todayCompleted / stats.todayScheduled) * 100 : 0}%` }}
-                                ></div>
-                            </div>
-                            
-                            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-tight">
-                                <div className="flex flex-col">
-                                    <span className="text-green-600">लगाएका: {stats.todayCompleted}</span>
-                                    <span className="text-orange-500 text-[8px]">बाँकी: {stats.todayPending}</span>
-                                </div>
-                                <div className="text-right bg-indigo-50 px-2 py-1 rounded border border-indigo-100">
-                                    <span className="text-indigo-700 block">आज खर्च: <span className="font-black">{stats.totalDosesExpendedToday}</span> <span className="text-[8px]">Doses</span></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Vaccine Logistics & Future Requirement - UPDATED WITH DAILY VIAL WASTE LOGIC FOR BOTH 1ML AND 0.5ML */}
-                    <div className="bg-white p-6 rounded-2xl border border-rose-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-rose-50 rounded-bl-full -mr-12 -mt-12 opacity-50 group-hover:bg-rose-100 transition-colors"></div>
-                        <div className="flex justify-between items-start mb-4 relative z-10">
-                            <div className="bg-rose-50 p-3 rounded-xl text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-colors">
-                                <TrendingUp size={24} />
-                            </div>
-                            <span className="text-[10px] font-bold bg-rose-50 text-rose-600 px-2 py-1 rounded-full uppercase">Future Forecast</span>
-                        </div>
-                        <div className="space-y-4 relative z-10">
-                            <div>
-                                <h3 className="text-3xl font-black text-slate-800 mb-1">{stats.totalFutureDosesNeeded} <span className="text-sm font-medium text-slate-400">Doses</span></h3>
-                                <p className="text-xs font-bold text-slate-500 font-nepali">कुल भविष्यको खोप आवश्यकता</p>
-                            </div>
-                            
-                            <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-100 space-y-3">
-                                <div className="flex items-center gap-1.5 text-rose-800 font-bold text-[11px] font-nepali uppercase">
-                                    <Clock size={14} className="text-rose-500" /> भाइल स्टक अनुमान (Daily Sum)
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="border-r border-rose-200 pr-2">
-                                        <p className="text-xl font-black text-rose-600">{stats.futureVials1ml}</p>
-                                        <p className="text-[9px] font-bold text-slate-400 uppercase leading-tight">1ml Vials<br/>(10 Doses/Vial)</p>
-                                    </div>
-                                    <div className="pl-2">
-                                        <p className="text-xl font-black text-rose-600">{stats.futureVials05ml}</p>
-                                        <p className="text-[9px] font-bold text-slate-400 uppercase leading-tight">0.5ml Vials<br/>(5 Doses/Vial)</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <p className="text-[10px] text-rose-400 italic">नोट: एक दिन खोलेको भाइल अर्को दिन प्रयोग गर्न नमिल्ने गरी गणना गरिएको छ।</p>
-                        </div>
-                    </div>
-
-                    {/* Pending Mag Forms */}
-                    <div className="bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-all group">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="bg-orange-50 p-3 rounded-xl text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                                <FilePlus size={24} />
-                            </div>
-                            <span className="text-[10px] font-bold bg-orange-50 text-orange-600 px-2 py-1 rounded-full uppercase">Pending</span>
-                        </div>
-                        <h3 className="text-3xl font-black text-slate-800 mb-1">{stats.pendingMagForms}</h3>
-                        <p className="text-sm font-bold text-slate-500 font-nepali">बाँकी माग फारम (Mag Forms)</p>
-                        <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-2 text-orange-600 text-xs font-bold cursor-pointer hover:underline" onClick={() => setActiveItem('mag_faram')}>
-                            प्रमाणिकरण गर्नुहोस् <ChevronRight size={14} />
-                        </div>
-                    </div>
-
-                    {/* Pending Stock Requests */}
-                    <div className="bg-white p-6 rounded-2xl border border-teal-100 shadow-sm hover:shadow-md transition-all group">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="bg-teal-50 p-3 rounded-xl text-teal-600 group-hover:bg-teal-600 group-hover:text-white transition-colors">
-                                <ClipboardCheck size={24} />
-                            </div>
-                            <span className="text-[10px] font-bold bg-teal-50 text-teal-600 px-2 py-1 rounded-full uppercase">To Approve</span>
-                        </div>
-                        <h3 className="text-3xl font-black text-slate-800 mb-1">{stats.pendingStockReq}</h3>
-                        <p className="text-sm font-bold text-slate-500 font-nepali">स्टक दाखिला अनुरोध (Entries)</p>
-                        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-teal-600 text-xs font-bold cursor-pointer hover:underline" onClick={() => setActiveItem('stock_entry_approval')}>
-                            स्वीकृति दिनुहोस् <ChevronRight size={14} />
-                        </div>
-                    </div>
+                <div className="bg-white p-6 rounded-2xl border border-rose-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-rose-50 rounded-bl-full -mr-12 -mt-12 opacity-50"></div>
+                    <div className="flex justify-between items-start mb-4 relative z-10"><div className="bg-rose-50 p-3 rounded-xl text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-colors"><TrendingUp size={24} /></div><span className="text-[10px] font-bold bg-rose-50 text-rose-600 px-2 py-1 rounded-full uppercase">Future Forecast</span></div>
+                    <div className="space-y-4 relative z-10"><div><h3 className="text-3xl font-black text-slate-800 mb-1">{stats.totalFutureDosesNeeded} <span className="text-sm font-medium text-slate-400">Doses</span></h3><p className="text-xs font-bold text-slate-500 font-nepali">कुल भविष्यको खोप आवश्यकता</p></div><div className="bg-rose-50/50 p-4 rounded-xl border border-rose-100 space-y-3"><div className="flex items-center gap-1.5 text-rose-800 font-bold text-[11px] font-nepali uppercase"><Clock size={14} className="text-rose-500" /> भाइल स्टक अनुमान</div><div className="grid grid-cols-2 gap-4"><div className="border-r border-rose-200 pr-2"><p className="text-xl font-black text-rose-600">{stats.futureVials1ml}</p><p className="text-[9px] font-bold text-slate-400 uppercase leading-tight">1ml Vials</p></div><div className="pl-2"><p className="text-xl font-black text-rose-600">{stats.futureVials05ml}</p><p className="text-[9px] font-bold text-slate-400 uppercase leading-tight">0.5ml Vials</p></div></div></div></div>
                 </div>
-
-                {/* Recent Activity / Welcome section */}
-                <div className="bg-gradient-to-r from-primary-600 to-indigo-700 rounded-[2rem] p-10 text-white shadow-xl shadow-primary-900/10 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
-                    <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-                        <div className="max-w-xl text-center md:text-left">
-                            <h2 className="text-3xl font-black font-nepali mb-3">नमस्ते, {currentUser.fullName}!</h2>
-                            <p className="text-primary-100 text-lg font-medium opacity-90 leading-relaxed">
-                                स्मार्ट जिन्सी व्यवस्थापन प्रणालीमा तपाईंलाई स्वागत छ। <br className="hidden md:block" /> 
-                                बायाँतर्फको मेनुबाट कार्य छनोट गरी सुरु गर्नुहोस्।
-                            </p>
-                            <div className="mt-8 flex flex-wrap gap-4 justify-center md:justify-start">
-                                <button onClick={() => setActiveItem('mag_faram')} className="bg-white text-primary-700 px-6 py-3 rounded-xl font-bold text-sm shadow-lg hover:scale-105 transition-transform flex items-center gap-2">
-                                    <FilePlus size={18} /> नयाँ माग फारम
-                                </button>
-                                <div className="bg-white/10 backdrop-blur-md px-5 py-3 rounded-xl border border-white/20 flex items-center gap-3">
-                                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                                    <span className="text-xs font-bold uppercase tracking-wider">System Live & Secure</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="hidden lg:block">
-                            <div className="bg-white/10 p-8 rounded-[2.5rem] backdrop-blur-md border border-white/20 shadow-inner">
-                                <PieChart size={120} className="text-white opacity-80" />
-                            </div>
-                        </div>
-                    </div>
+                <div className="bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="flex justify-between items-start mb-4"><div className="bg-orange-50 p-3 rounded-xl text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors"><FilePlus size={24} /></div><span className="text-[10px] font-bold bg-orange-50 text-orange-600 px-2 py-1 rounded-full uppercase">Pending</span></div>
+                    <h3 className="text-3xl font-black text-slate-800 mb-1">{stats.pendingMagForms}</h3><p className="text-sm font-bold text-slate-500 font-nepali">बाँकी माग फारम (Mag Forms)</p>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-teal-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="flex justify-between items-start mb-4"><div className="bg-teal-50 p-3 rounded-xl text-teal-600 group-hover:bg-teal-600 group-hover:text-white transition-colors"><ClipboardCheck size={24} /></div><span className="text-[10px] font-bold bg-teal-50 text-teal-600 px-2 py-1 rounded-full uppercase">To Approve</span></div>
+                    <h3 className="text-3xl font-black text-slate-800 mb-1">{stats.pendingStockReq}</h3><p className="text-sm font-bold text-slate-500 font-nepali">स्टक दाखिला अनुरोध (Entries)</p>
                 </div>
             </div>
-        );
-      case 'user_management':
-        return <UserManagement currentUser={currentUser} users={users} onAddUser={onAddUser} onUpdateUser={onUpdateUser} onDeleteUser={onDeleteUser} />;
-      case 'change_password':
-        return <ChangePassword currentUser={currentUser} users={users} onChangePassword={onChangePassword} />;
-      case 'store_setup':
-        return <StoreSetup currentFiscalYear={currentFiscalYear} stores={stores} onAddStore={onAddStore} onUpdateStore={onUpdateStore} onDeleteStore={onDeleteStore} inventoryItems={inventoryItems} onUpdateInventoryItem={onUpdateInventoryItem} />;
-      case 'tb_leprosy':
-        return <TBPatientRegistration currentFiscalYear={currentFiscalYear} />;
-      case 'rabies':
-        return <RabiesRegistration currentFiscalYear={currentFiscalYear} patients={rabiesPatients} onAddPatient={onAddRabiesPatient} onUpdatePatient={onUpdateRabiesPatient} onDeletePatient={onDeletePatient} currentUser={currentUser} />;
-      case 'report_rabies':
-        return <RabiesReport currentFiscalYear={currentFiscalYear} currentUser={currentUser} patients={rabiesPatients} />;
-      case 'mag_faram':
-        return <MagFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} existingForms={magForms} onSave={onSaveMagForm} inventoryItems={inventoryItems} stores={stores} generalSettings={generalSettings} allUsers={users} />;
-      case 'kharid_adesh':
-        return <KharidAdesh orders={purchaseOrders} currentFiscalYear={currentFiscalYear} onSave={onUpdatePurchaseOrder} currentUser={currentUser} firms={firms} quotations={quotations} onDakhilaClick={handleDakhilaFromPo} generalSettings={generalSettings} />;
-      case 'nikasha_pratibedan':
-        return <NikashaPratibedan reports={issueReports} onSave={onUpdateIssueReport} currentUser={currentUser} currentFiscalYear={currentFiscalYear} generalSettings={generalSettings} />;
-      case 'form_suchikaran': 
-        return <FirmListing currentFiscalYear={currentFiscalYear} firms={firms} onAddFirm={onAddFirm} />;
-      case 'quotation': 
-        return <Quotation currentFiscalYear={currentFiscalYear} firms={firms} quotations={quotations} onAddQuotation={onAddQuotation} inventoryItems={inventoryItems} />;
-      case 'jinshi_maujdat': 
-        return <JinshiMaujdat currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} onAddInventoryItem={onAddInventoryItem} onUpdateInventoryItem={onUpdateInventoryItem} stores={stores} onRequestStockEntry={onRequestStockEntry} pendingPoDakhila={pendingPoDakhila} onClearPendingPoDakhila={() => setPendingPoDakhila(null)} />;
-      case 'stock_entry_approval':
-        return <StockEntryApproval requests={stockEntryRequests} currentUser={currentUser} onApprove={onApproveStockEntry} onReject={onRejectStockEntry} stores={stores} />;
-      case 'dakhila_pratibedan':
-        return <DakhilaPratibedan dakhilaReports={dakhilaReports} onSaveDakhilaReport={onSaveDakhilaReport} currentFiscalYear={currentFiscalYear} currentUser={currentUser} stockEntryRequests={stockEntryRequests} inventoryItems={inventoryItems} onApproveStockEntry={onApproveStockEntry} onReject={onRejectStockEntry} generalSettings={generalSettings} stores={stores} />;
-      case 'sahayak_jinshi_khata': 
-        return <SahayakJinshiKhata currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} issueReports={issueReports} dakhilaReports={dakhilaReports} stockEntryRequests={stockEntryRequests} users={users} returnEntries={returnEntries} generalSettings={generalSettings} />;
-      case 'jinshi_khata':
-        return <JinshiKhata currentFiscalYear={currentFiscalYear} inventoryItems={inventoryItems} issueReports={issueReports} dakhilaReports={dakhilaReports} stockEntryRequests={stockEntryRequests} returnEntries={returnEntries} generalSettings={generalSettings} />;
-      case 'jinshi_firta_khata':
-        return <JinshiFirtaFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} returnEntries={returnEntries} onSaveReturnEntry={onSaveReturnEntry} issueReports={issueReports} generalSettings={generalSettings} />;
-      case 'marmat_adesh':
-        return <MarmatAdesh currentFiscalYear={currentFiscalYear} currentUser={currentUser} marmatEntries={marmatEntries} onSaveMarmatEntry={onSaveMarmatEntry} inventoryItems={inventoryItems} generalSettings={generalSettings} />;
-      case 'dhuliyauna_faram':
-        return <DhuliyaunaFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} dhuliyaunaEntries={dhuliyaunaEntries} onSaveDhuliyaunaEntry={onSaveDhuliyaunaEntry} stores={stores} />;
-      case 'log_book':
-        return <LogBook currentUser={currentUser} currentFiscalYear={currentFiscalYear} inventoryItems={inventoryItems} logBookEntries={logBookEntries} onAddLogEntry={onSaveLogBookEntry} />;
-      case 'report_inventory_monthly':
-        return <InventoryMonthlyReport currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} stores={stores} magForms={magForms} onSaveMagForm={onSaveMagForm} generalSettings={generalSettings} />;
-      case 'database_management':
-        return <DatabaseManagement currentUser={currentUser} users={users} inventoryItems={inventoryItems} magForms={magForms} purchaseOrders={purchaseOrders} issueReports={issueReports} rabiesPatients={rabiesPatients} firms={firms} stores={stores} onClearData={onClearData} />;
-      default:
-        return null;
+            <div className="bg-gradient-to-r from-primary-600 to-indigo-700 rounded-[2rem] p-10 text-white shadow-xl shadow-primary-900/10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
+                <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                    <div className="max-w-xl text-center md:text-left"><h2 className="text-3xl font-black font-nepali mb-3">नमस्ते, {currentUser.fullName}!</h2><p className="text-primary-100 text-lg font-medium opacity-90 leading-relaxed">स्मार्ट जिन्सी व्यवस्थापन प्रणालीमा तपाईंलाई स्वागत छ। <br className="hidden md:block" /> बायाँतर्फको मेनुबाट कार्य छनोट गरी सुरु गर्नुहोस्।</p></div>
+                    <div className="hidden lg:block"><div className="bg-white/10 p-8 rounded-[2.5rem] backdrop-blur-md border border-white/20 shadow-inner"><PieChart size={120} className="text-white opacity-80" /></div></div>
+                </div>
+            </div>
+        </div>
+      );
+      case 'user_management': return <UserManagement currentUser={currentUser} users={users} onAddUser={onAddUser} onUpdateUser={onUpdateUser} onDeleteUser={onDeleteUser} />;
+      case 'change_password': return <ChangePassword currentUser={currentUser} users={users} onChangePassword={onChangePassword} />;
+      case 'store_setup': return <StoreSetup currentFiscalYear={currentFiscalYear} stores={stores} onAddStore={onAddStore} onUpdateStore={onUpdateStore} onDeleteStore={onDeleteStore} inventoryItems={inventoryItems} onUpdateInventoryItem={onUpdateInventoryItem} />;
+      case 'tb_leprosy': return <TBPatientRegistration currentFiscalYear={currentFiscalYear} />;
+      case 'rabies': return <RabiesRegistration currentFiscalYear={currentFiscalYear} patients={rabiesPatients} onAddPatient={onAddRabiesPatient} onUpdatePatient={onUpdateRabiesPatient} onDeletePatient={onDeletePatient} currentUser={currentUser} />;
+      case 'report_rabies': return <RabiesReport currentFiscalYear={currentFiscalYear} currentUser={currentUser} patients={rabiesPatients} />;
+      case 'mag_faram': return <MagFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} existingForms={magForms} onSave={onSaveMagForm} inventoryItems={inventoryItems} stores={stores} generalSettings={generalSettings} allUsers={users} />;
+      case 'kharid_adesh': return <KharidAdesh orders={purchaseOrders} currentFiscalYear={currentFiscalYear} onSave={onUpdatePurchaseOrder} currentUser={currentUser} firms={firms} quotations={quotations} onDakhilaClick={handleDakhilaFromPo} generalSettings={generalSettings} />;
+      case 'nikasha_pratibedan': return <NikashaPratibedan reports={issueReports} onSave={onUpdateIssueReport} currentUser={currentUser} currentFiscalYear={currentFiscalYear} generalSettings={generalSettings} />;
+      case 'form_suchikaran': return <FirmListing currentFiscalYear={currentFiscalYear} firms={firms} onAddFirm={onAddFirm} />;
+      case 'quotation': return <Quotation currentFiscalYear={currentFiscalYear} firms={firms} quotations={quotations} onAddQuotation={onAddQuotation} inventoryItems={inventoryItems} />;
+      case 'jinshi_maujdat': return <JinshiMaujdat currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} onAddInventoryItem={onAddInventoryItem} onUpdateInventoryItem={onUpdateInventoryItem} stores={stores} onRequestStockEntry={onRequestStockEntry} pendingPoDakhila={pendingPoDakhila} onClearPendingPoDakhila={() => setPendingPoDakhila(null)} />;
+      case 'stock_entry_approval': return <StockEntryApproval requests={stockEntryRequests} currentUser={currentUser} onApprove={onApproveStockEntry} onReject={onRejectStockEntry} stores={stores} />;
+      case 'dakhila_pratibedan': return <DakhilaPratibedan dakhilaReports={dakhilaReports} onSaveDakhilaReport={onSaveDakhilaReport} currentFiscalYear={currentFiscalYear} currentUser={currentUser} stockEntryRequests={stockEntryRequests} inventoryItems={inventoryItems} onApproveStockEntry={onApproveStockEntry} onReject={onRejectStockEntry} generalSettings={generalSettings} stores={stores} />;
+      case 'sahayak_jinshi_khata': return <SahayakJinshiKhata currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} issueReports={issueReports} dakhilaReports={dakhilaReports} stockEntryRequests={stockEntryRequests} users={users} returnEntries={returnEntries} generalSettings={generalSettings} />;
+      case 'jinshi_khata': return <JinshiKhata currentFiscalYear={currentFiscalYear} inventoryItems={inventoryItems} issueReports={issueReports} dakhilaReports={dakhilaReports} stockEntryRequests={stockEntryRequests} returnEntries={returnEntries} generalSettings={generalSettings} />;
+      case 'jinshi_firta_khata': return <JinshiFirtaFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} returnEntries={returnEntries} onSaveReturnEntry={onSaveReturnEntry} issueReports={issueReports} generalSettings={generalSettings} />;
+      case 'marmat_adesh': return <MarmatAdesh currentFiscalYear={currentFiscalYear} currentUser={currentUser} marmatEntries={marmatEntries} onSaveMarmatEntry={onSaveMarmatEntry} inventoryItems={inventoryItems} generalSettings={generalSettings} />;
+      case 'dhuliyauna_faram': return <DhuliyaunaFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} dhuliyaunaEntries={dhuliyaunaEntries} onSaveDhuliyaunaEntry={onSaveDhuliyaunaEntry} stores={stores} />;
+      case 'log_book': return <LogBook currentUser={currentUser} currentFiscalYear={currentFiscalYear} inventoryItems={inventoryItems} logBookEntries={logBookEntries} onAddLogEntry={onSaveLogBookEntry} />;
+      case 'report_inventory_monthly': return <InventoryMonthlyReport currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} stores={stores} magForms={magForms} onSaveMagForm={onSaveMagForm} generalSettings={generalSettings} />;
+      case 'database_management': return <DatabaseManagement currentUser={currentUser} users={users} inventoryItems={inventoryItems} magForms={magForms} purchaseOrders={purchaseOrders} issueReports={issueReports} rabiesPatients={rabiesPatients} firms={firms} stores={stores} onClearData={onClearData} />;
+      default: return null;
     }
   };
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
-      {isSidebarOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-20 md:hidden transition-opacity duration-300" onClick={() => setIsSidebarOpen(false)} />
-      )}
-      <aside className={`fixed md:relative z-30 h-full bg-slate-900 text-white flex flex-col shadow-xl transition-all duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64 md:w-0 md:translate-x-0 md:overflow-hidden'}`}>
-        <div className="p-6 border-b border-slate-800 flex items-center gap-3 bg-slate-950 shrink-0">
-            <div className="bg-primary-600 p-2 rounded-lg shadow-lg shadow-primary-500/20">
-                <Activity size={20} className="text-white" />
-            </div>
-            <div className={`transition-opacity duration-300 ${isSidebarOpen || (window.innerWidth < 768) ? 'opacity-100' : 'opacity-0 md:opacity-100'}`}>
-                <h2 className="font-nepali font-bold text-lg leading-tight tracking-wide">{APP_NAME}</h2>
-                <p className="text-xs text-slate-400 font-nepali">{currentUser.organizationName || ORG_NAME}</p>
-            </div>
-        </div>
+      {isSidebarOpen && <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-20 md:hidden transition-opacity duration-300 no-print" onClick={() => setIsSidebarOpen(false)} />}
+      <aside className={`fixed md:relative z-30 h-full bg-slate-900 text-white flex flex-col shadow-xl transition-all duration-300 ease-in-out no-print ${isSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full w-64 md:w-0 md:translate-x-0 md:overflow-hidden'}`}>
+        <div className="p-6 border-b border-slate-800 flex items-center gap-3 bg-slate-950 shrink-0"><div className="bg-primary-600 p-2 rounded-lg"><Activity size={20} className="text-white" /></div><div className={`transition-opacity duration-300 ${isSidebarOpen || (window.innerWidth < 768) ? 'opacity-100' : 'opacity-0 md:opacity-100'}`}><h2 className="font-nepali font-bold text-lg leading-tight">{APP_NAME}</h2><p className="text-xs text-slate-400 font-nepali">{currentUser.organizationName || ORG_NAME}</p></div></div>
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
              {menuItems.map((item) => (
                <div key={item.id}>
-                  <button onClick={() => handleMenuClick(item)} className={`w-full flex items-start justify-between px-4 py-3 rounded-xl transition-all duration-200 group ${activeItem === item.id ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/20' : (expandedMenu === item.id ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800')}`}>
-                    <div className="flex items-start gap-3">
-                      <div className={`mt-0.5 ${activeItem === item.id ? 'text-white' : 'group-hover:text-primary-400'} transition-colors`}>{item.icon}</div>
-                      <span className="font-medium font-nepali text-left leading-snug">{item.label}</span>
-                    </div>
-                    {item.subItems && (
-                      <div className="text-slate-500 mt-1">{expandedMenu === item.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</div>
-                    )}
-                  </button>
-                  {item.subItems && expandedMenu === item.id && (
-                    <div className="mt-1 ml-4 pl-3 border-l border-slate-700 space-y-1">
-                      {item.subItems.map((subItem) => (
-                        <div key={subItem.id}>
-                            <button onClick={() => subItem.subItems ? handleLevel3Click(subItem.id) : handleSubItemClick(subItem.id)} className={`w-full flex items-start justify-between px-4 py-2.5 rounded-lg text-sm transition-colors ${activeItem === subItem.id ? 'bg-slate-800 text-primary-300 font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}>
-                                <div className="flex items-start gap-2">
-                                    <div className="mt-0.5">{subItem.icon}</div>
-                                    <span className="font-nepali text-left leading-normal">{subItem.label}</span>
-                                </div>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                    {subItem.badgeCount !== undefined && subItem.badgeCount > 0 && (<span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.2rem] text-center">{subItem.badgeCount}</span>)}
-                                    {subItem.subItems && (expandedSubMenu === subItem.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
-                                </div>
-                            </button>
-                            {subItem.subItems && expandedSubMenu === subItem.id && (
-                                <div className="mt-1 ml-4 pl-3 border-l border-slate-700 space-y-1">
-                                    {subItem.subItems.map(level3Item => (
-                                        <button key={level3Item.id} onClick={() => handleSubItemClick(level3Item.id)} className={`w-full flex items-start gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${activeItem === level3Item.id ? 'bg-slate-800 text-primary-300 font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}>
-                                            <div className="mt-0.5">{level3Item.icon}</div>
-                                            <span className="font-nepali text-left leading-normal">{level3Item.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <button onClick={() => handleMenuClick(item)} className={`w-full flex items-start justify-between px-4 py-3 rounded-xl transition-all duration-200 group ${activeItem === item.id ? 'bg-primary-600 text-white shadow-lg' : (expandedMenu === item.id ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800')}`}><div className="flex items-start gap-3"><div className={`mt-0.5 ${activeItem === item.id ? 'text-white' : 'group-hover:text-primary-400'}`}>{item.icon}</div><span className="font-medium font-nepali text-left leading-snug">{item.label}</span></div>{item.subItems && <div className="text-slate-500 mt-1">{expandedMenu === item.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</div>}</button>
+                  {item.subItems && expandedMenu === item.id && (<div className="mt-1 ml-4 pl-3 border-l border-slate-700 space-y-1">{item.subItems.map((subItem) => (<div key={subItem.id}><button onClick={() => subItem.subItems ? handleLevel3Click(subItem.id) : handleSubItemClick(subItem.id)} className={`w-full flex items-start justify-between px-4 py-2.5 rounded-lg text-sm transition-colors ${activeItem === subItem.id ? 'bg-slate-800 text-primary-300 font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}><div className="flex items-start gap-2"><div className="mt-0.5">{subItem.icon}</div><span className="font-nepali text-left leading-normal">{subItem.label}</span></div><div className="flex items-center gap-2 mt-0.5">{subItem.badgeCount !== undefined && subItem.badgeCount > 0 && (<span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.2rem] text-center">{subItem.badgeCount}</span>)}{subItem.subItems && (expandedSubMenu === subItem.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}</div></button></div>))}</div>)}
                </div>
              ))}
         </nav>
-        <div className="p-4 border-t border-slate-800 bg-slate-950 shrink-0">
-            <button onClick={onLogout} className="flex items-center gap-3 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 w-full rounded-xl transition-all duration-200 group">
-                <LogOut size={18} className="group-hover:-translate-x-1 transition-transform" />
-                <span className="font-medium">लगआउट (Logout)</span>
-            </button>
-        </div>
+        <div className="p-4 border-t border-slate-800 bg-slate-950 shrink-0"><button onClick={onLogout} className="flex items-center gap-3 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 w-full rounded-xl transition-all duration-200 group"><LogOut size={18} /><span className="font-medium">लगआउट (Logout)</span></button></div>
       </aside>
-      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
-        <header className="bg-white border-b border-slate-200 p-4 flex md:hidden items-center justify-between shadow-sm z-10 shrink-0">
-            <div className="flex items-center gap-3">
-                 <button onClick={() => setIsSidebarOpen(true)} className="bg-primary-600 p-1.5 rounded-md hover:bg-primary-700 transition-colors">
-                    <Menu size={18} className="text-white" />
-                </button>
-                <span className="font-bold text-slate-700 font-nepali">{APP_NAME}</span>
-            </div>
-            <div className="flex items-center gap-4">
-                {latestApprovedDakhila && (
-                    <button onClick={handleNotificationClick} className={`relative p-1 transition-colors ${latestApprovedDakhila ? 'text-slate-600 hover:text-slate-800' : 'text-slate-300'}`}>
-                        <Bell size={20} />
-                        {latestApprovedDakhila.id !== lastSeenNotificationId && (
-                            <span className="absolute top-0 right-0 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
-                        )}
-                    </button>
-                )}
-                <button onClick={onLogout} className="text-slate-500 hover:text-red-500"><LogOut size={20} /></button>
-            </div>
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative print:h-auto print:overflow-visible">
+        <header className="bg-white border-b border-slate-200 p-4 flex md:hidden items-center justify-between shadow-sm z-10 shrink-0 no-print">
+            <div className="flex items-center gap-3"><button onClick={() => setIsSidebarOpen(true)} className="bg-primary-600 p-1.5 rounded-md hover:bg-primary-700 transition-colors"><Menu size={18} className="text-white" /></button><span className="font-bold text-slate-700 font-nepali">{APP_NAME}</span></div>
+            <div className="flex items-center gap-4">{latestApprovedDakhila && (<button onClick={handleNotificationClick} className={`relative p-1 transition-colors ${latestApprovedDakhila ? 'text-slate-600 hover:text-slate-800' : 'text-slate-300'}`}><Bell size={20} />{latestApprovedDakhila.id !== lastSeenNotificationId && (<span className="absolute top-0 right-0 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>)}</button>)}<button onClick={onLogout} className="text-slate-500 hover:text-red-500"><LogOut size={20} /></button></div>
         </header>
-        <div className="hidden md:flex bg-white border-b border-slate-200 px-8 py-4 justify-between items-center shadow-sm z-10 shrink-0">
-            <div className="flex items-center gap-4">
-               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors" title={isSidebarOpen ? "Hide Menu" : "Show Menu"}><Menu size={24} /></button>
-               <h2 className="text-lg font-semibold text-slate-700">ड्यासबोर्ड (Dashboard)</h2>
-               <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-100 text-sm font-medium"><Calendar size={14} /><span className="font-nepali">आ.व. {fiscalYearLabel}</span></div>
-            </div>
-            <div className="flex items-center gap-6">
-                 <div className="relative">
-                    <button onClick={handleNotificationClick} className={`p-2 rounded-full hover:bg-slate-100 transition-colors ${latestApprovedDakhila ? 'text-slate-600' : 'text-slate-300 cursor-not-allowed'}`} title={latestApprovedDakhila ? "Latest Approved Stock Entry" : "No recent notifications"} disabled={!latestApprovedDakhila}>
-                        <Bell size={22} />
-                        {latestApprovedDakhila && latestApprovedDakhila.id !== lastSeenNotificationId && (
-                            <span className="absolute top-1.5 right-2 h-3 w-3 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
-                        )}
-                    </button>
-                 </div>
-                 <div className="flex items-center gap-3">
-                     <div className="text-right"><p className="text-sm font-bold text-slate-800">{currentUser.username}</p><p className="text-xs text-slate-500">{currentUser.role}</p></div>
-                    <div className="w-10 h-10 bg-primary-100 border-2 border-primary-200 text-primary-700 rounded-full flex items-center justify-center font-bold shadow-sm uppercase">{currentUser.username.charAt(0)}</div>
-                </div>
-            </div>
+        <div className="hidden md:flex bg-white border-b border-slate-200 px-8 py-4 justify-between items-center shadow-sm z-10 shrink-0 no-print">
+            <div className="flex items-center gap-4"><button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"><Menu size={24} /></button><h2 className="text-lg font-semibold text-slate-700">ड्यासबोर्ड (Dashboard)</h2><div className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-100 text-sm font-medium"><Calendar size={14} /><span className="font-nepali">आ.व. {fiscalYearLabel}</span></div></div>
+            <div className="flex items-center gap-6"><div className="relative"><button onClick={handleNotificationClick} className={`p-2 rounded-full hover:bg-slate-100 transition-colors ${latestApprovedDakhila ? 'text-slate-600' : 'text-slate-300 cursor-not-allowed'}`} disabled={!latestApprovedDakhila}><Bell size={22} />{latestApprovedDakhila && latestApprovedDakhila.id !== lastSeenNotificationId && (<span className="absolute top-1.5 right-2 h-3 w-3 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>)}</button></div><div className="flex items-center gap-3"><div className="text-right"><p className="text-sm font-bold text-slate-800">{currentUser.username}</p><p className="text-xs text-slate-500">{currentUser.role}</p></div><div className="w-10 h-10 bg-primary-100 border-2 border-primary-200 text-primary-700 rounded-full flex items-center justify-center font-bold shadow-sm uppercase">{currentUser.username.charAt(0)}</div></div></div>
         </div>
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-50/50 p-4 md:p-6 relative scroll-smooth scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-50/50 p-4 md:p-6 relative scroll-smooth scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent print:p-0 print:bg-white print:h-auto print:overflow-visible">
              {renderContent()}
         </main>
       </div>
-      {showNotificationModal && latestApprovedDakhila && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setShowNotificationModal(false)}></div>
-              <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-                  <div className="px-6 py-4 border-b border-green-100 flex justify-between items-center bg-green-50">
-                      <div className="flex items-center gap-3">
-                          <div className="bg-green-100 p-2 rounded-lg text-green-600"><CheckCircle2 size={24} /></div>
-                          <div><h3 className="font-bold text-slate-800 text-lg font-nepali">भर्खरै दाखिला भएको विवरण</h3><p className="text-xs text-slate-600">मिति: {latestApprovedDakhila.requestDateBs}</p></div>
-                      </div>
-                      <button onClick={() => setShowNotificationModal(false)} className="p-2 hover:bg-green-100 rounded-full text-green-600 transition-colors"><X size={20} /></button>
-                  </div>
-                  <div className="p-0 overflow-y-auto max-h-[60vh]">
-                      <table className="w-full text-sm text-left">
-                          <thead className="bg-slate-50 text-slate-600 font-medium border-b border-slate-200">
-                              <tr><th className="px-6 py-3 w-16 text-center">क्र.सं.</th><th className="px-6 py-3">सामानको नाम</th><th className="px-6 py-3 text-center">परिमाण</th></tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                              {latestApprovedDakhila.items.map((item, index) => (
-                                  <tr key={index} className="hover:bg-slate-50">
-                                      <td className="px-6 py-3 text-center text-slate-500">{index + 1}</td>
-                                      <td className="px-6 py-3 font-medium text-slate-800">{item.itemName}</td>
-                                      <td className="px-6 py-3 text-center font-bold text-green-600 bg-green-50/30">{item.currentQuantity}</td>
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                  </div>
-                  <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
-                      <button onClick={() => setShowNotificationModal(false)} className="px-6 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium">Close</button>
-                  </div>
-              </div>
-          </div>
-      )}
     </div>
   );
 };
