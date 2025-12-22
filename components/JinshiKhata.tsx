@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Calendar, Printer, Search, BookOpen, Layers, ShieldCheck } from 'lucide-react';
 import { Select } from './Select';
 import { SearchableSelect } from './SearchableSelect';
-import { InventoryItem, IssueReportEntry, DakhilaPratibedanEntry, ReturnEntry, OrganizationSettings, StockEntryRequest } from '../types';
+import { InventoryItem, IssueReportEntry, DakhilaPratibedanEntry, ReturnEntry, OrganizationSettings, StockEntryRequest, Option } from '../types';
 import { FISCAL_YEARS } from '../constants';
 
 interface JinshiKhataProps {
@@ -46,19 +46,32 @@ export const JinshiKhata: React.FC<JinshiKhataProps> = ({
   const [selectedItemName, setSelectedItemName] = useState<string>('');
   const [ledgerType, setLedgerType] = useState<'Expendable' | 'Non-Expendable'>('Expendable');
 
+  // FIX: Group items by name so we only see one option per unique item name in the dropdown
   const itemOptions = useMemo(() => {
-    return inventoryItems
+    const uniqueItemsMap = new Map<string, { unit: string }>();
+    
+    inventoryItems
         .filter(item => item.itemType === ledgerType)
-        .map(item => ({
-            id: item.id,
-            value: item.itemName, 
-            label: `${item.itemName} (${item.unit})`
-        })).sort((a, b) => a.label.localeCompare(b.label));
+        .forEach(item => {
+            const name = item.itemName.trim();
+            if (!uniqueItemsMap.has(name)) {
+                uniqueItemsMap.set(name, { unit: item.unit });
+            }
+        });
+
+    return Array.from(uniqueItemsMap.entries())
+        .map(([name, data]) => ({
+            id: name,
+            value: name, 
+            label: `${name} (${data.unit})`
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
   }, [inventoryItems, ledgerType]);
 
   const selectedItemDetail = useMemo(() => {
     if (!selectedItemName) return null;
-    return inventoryItems.find(i => i.itemName === selectedItemName && i.itemType === ledgerType);
+    // Find the first occurrence to use as a template for metadata (unit, etc.)
+    return inventoryItems.find(i => i.itemName.trim() === selectedItemName.trim() && i.itemType === ledgerType);
   }, [inventoryItems, selectedItemName, ledgerType]);
 
   const tableData = useMemo(() => {
@@ -66,59 +79,51 @@ export const JinshiKhata: React.FC<JinshiKhataProps> = ({
 
     let transactions: any[] = [];
     const safeName = selectedItemName.trim().toLowerCase();
-    const seenDakhilaRefs = new Set<string>();
-
-    // १. दाखिला/ओपनिङ्ग (आम्दानी)
+    
+    // १. दाखिला रिपोर्टहरूबाट आम्दानी
     dakhilaReports.forEach(report => {
         if (report.fiscalYear !== selectedFiscalYear) return;
         report.items.forEach(item => {
             if (item.name.trim().toLowerCase() === safeName) {
-                const refKey = `INC-${report.dakhilaNo}`;
-                if (!seenDakhilaRefs.has(refKey)) {
-                    transactions.push({
-                        id: `DAKHILA-${report.id}-${item.id}`,
-                        date: report.date,
-                        refNo: report.dakhilaNo, 
-                        type: item.source === 'Opening' ? 'Opening' : 'Income',
-                        qty: item.quantity,
-                        rate: item.rate,
-                        remarks: item.remarks || report.orderNo || '',
-                        specification: item.specification,
-                        source: item.source || 'Purchase'
-                    });
-                    seenDakhilaRefs.add(refKey);
-                }
+                transactions.push({
+                    id: `DAKHILA-${report.id}-${item.id}`,
+                    date: report.date,
+                    refNo: report.dakhilaNo, 
+                    type: item.source === 'Opening' ? 'Opening' : 'Income',
+                    qty: Number(item.quantity) || 0,
+                    rate: Number(item.rate) || 0,
+                    remarks: item.remarks || report.orderNo || '',
+                    specification: item.specification,
+                    source: item.source || 'Purchase',
+                    serialNo: item.codeNo
+                });
             }
         });
     });
 
-    // २. स्टक अनुरोधबाट आम्दानी
+    // २. स्टक अनुरोध (Pending/Direct Entry) बाट आम्दानी
     stockEntryRequests.forEach(req => {
         if (req.status === 'Approved' && req.fiscalYear === selectedFiscalYear) {
             req.items.forEach(item => {
                 if (item.itemName.trim().toLowerCase() === safeName) {
-                    const dNo = item.dakhilaNo || `REQ-${req.id.slice(-4)}`;
-                    const refKey = `INC-${dNo}`;
-                    if (!seenDakhilaRefs.has(refKey)) {
-                        transactions.push({
-                            id: `STKREQ-${req.id}-${item.id}`,
-                            date: req.requestDateBs,
-                            refNo: dNo,
-                            type: req.mode === 'opening' ? 'Opening' : 'Income',
-                            qty: item.currentQuantity,
-                            rate: item.rate || 0,
-                            remarks: item.remarks || req.receiptSource || '',
-                            specification: item.specification,
-                            source: req.receiptSource || 'Initial'
-                        });
-                        seenDakhilaRefs.add(refKey);
-                    }
+                    transactions.push({
+                        id: `STKREQ-${req.id}-${item.id}`,
+                        date: req.requestDateBs,
+                        refNo: item.dakhilaNo || `REQ-${req.id.slice(-4)}`,
+                        type: req.mode === 'opening' ? 'Opening' : 'Income',
+                        qty: Number(item.currentQuantity) || 0,
+                        rate: Number(item.rate) || 0,
+                        remarks: item.remarks || req.receiptSource || '',
+                        specification: item.specification,
+                        source: req.receiptSource || 'Initial',
+                        serialNo: item.uniqueCode || item.sanketNo
+                    });
                 }
             });
         }
     });
 
-    // ३. फिर्ता फारम (Returns - acts as Income)
+    // ३. फिर्ता फारम (ReturnEntries act as Income)
     returnEntries.forEach(entry => {
         if (entry.fiscalYear !== selectedFiscalYear) return;
         if (entry.status === 'Approved') {
@@ -129,18 +134,19 @@ export const JinshiKhata: React.FC<JinshiKhataProps> = ({
                         date: entry.date,
                         refNo: entry.formNo,
                         type: 'Return', 
-                        qty: item.quantity,
-                        rate: item.rate,
+                        qty: Number(item.quantity) || 0,
+                        rate: Number(item.rate) || 0,
                         remarks: `फिर्ता (By: ${entry.returnedBy.name})`,
                         specification: item.specification,
-                        source: 'फिर्ता'
+                        source: 'फिर्ता',
+                        serialNo: item.codeNo
                     });
                 }
             });
         }
     });
 
-    // ४. निकासा (Expense/Kharcha)
+    // ४. निकासा प्रतिवेदन (Expense/Kharcha)
     issueReports.forEach(report => {
         if (report.fiscalYear !== selectedFiscalYear) return;
         if (report.status === 'Issued') {
@@ -151,52 +157,54 @@ export const JinshiKhata: React.FC<JinshiKhataProps> = ({
                         date: report.issueDate || report.requestDate,
                         refNo: report.issueNo || report.magFormNo, 
                         type: 'Expense',
-                        qty: parseFloat(item.quantity) || 0,
-                        rate: item.rate || 0,
+                        qty: Number(item.quantity) || 0,
+                        rate: Number(item.rate) || 0,
                         remarks: report.demandBy?.name || '',
-                        specification: item.specification
+                        specification: item.specification,
+                        serialNo: item.codeNo
                     });
                 }
             });
         }
     });
 
-    // मिति र प्रकार अनुसार क्रमवद्ध गर्ने (तपाईंले खोज्नुभएको ५ -> ४ -> ५ को नतिजाको लागि)
+    // मिति र प्रकार अनुसार क्रमवद्ध गर्ने
     transactions.sort((a, b) => {
         const dateComp = a.date.localeCompare(b.date);
         if (dateComp !== 0) return dateComp;
-        // Same day logic: Opening(0) -> Income(1) -> Expense(2) -> Return(3)
-        // यसो गर्दा खर्च भएर घटेको मौज्दातमा फिर्ता भएको सामान जोडिएर अन्तिम बाँकी सही देखिन्छ।
-        const orderMap: Record<string, number> = { 'Opening': 0, 'Income': 1, 'Expense': 2, 'Return': 3 };
+        const orderMap: Record<string, number> = { 'Opening': 0, 'Income': 1, 'Return': 2, 'Expense': 3 };
         return orderMap[a.type] - orderMap[b.type];
     });
 
-    // ५. बाँकी परिमाण गणना (Running Balance)
+    // ५. बाँकी परिमाण गणना (Unified Running Balance)
     let runningQty = 0;
     let runningVal = 0; 
     
     return transactions.map(txn => {
-        const txnTotal = txn.qty * txn.rate;
+        const currentQty = Number(txn.qty) || 0;
+        const currentRate = Number(txn.rate) || 0;
+        const txnTotal = currentQty * currentRate;
+
         if (txn.type === 'Income' || txn.type === 'Opening' || txn.type === 'Return') {
-            // आम्दानी र फिर्ता दुवैले मौज्दात बढाउँछन्
-            runningQty += txn.qty;
-            runningVal += txnTotal;
+            runningQty = Number((runningQty + currentQty).toFixed(4));
+            runningVal = Number((runningVal + txnTotal).toFixed(2));
         } else {
-            // खर्चले मौज्दात घटाउँछ
-            runningQty -= txn.qty;
-            runningVal -= txnTotal;
+            runningQty = Number((runningQty - currentQty).toFixed(4));
+            runningVal = Number((runningVal - txnTotal).toFixed(2));
         }
 
         return {
             ...txn,
+            qty: currentQty,
+            rate: currentRate,
             total: txnTotal,
             balQty: runningQty,
             balTotal: runningVal,
-            model: selectedItemDetail?.uniqueCode || '', 
-            serialNo: selectedItemDetail?.sanketNo || ''
+            model: txn.model || '', 
+            serialNo: txn.serialNo || ''
         };
     });
-  }, [selectedItemName, selectedFiscalYear, dakhilaReports, stockEntryRequests, returnEntries, issueReports, selectedItemDetail, ledgerType]);
+  }, [selectedItemName, selectedFiscalYear, dakhilaReports, stockEntryRequests, returnEntries, issueReports, ledgerType]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
@@ -205,7 +213,7 @@ export const JinshiKhata: React.FC<JinshiKhataProps> = ({
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 text-slate-700 font-bold font-nepali text-lg">
                     <BookOpen size={24} className="text-primary-600"/>
-                    जिन्सी खाता (Inventory Ledger)
+                    जिन्सी खाता (एकीकृत लेजर)
                 </div>
                 <div className="flex bg-slate-100 p-1 rounded-lg">
                     <button onClick={() => {setLedgerType('Expendable'); setSelectedItemName('');}} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${ledgerType === 'Expendable' ? 'bg-white text-orange-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>खर्च हुने (407)</button>
@@ -214,7 +222,7 @@ export const JinshiKhata: React.FC<JinshiKhataProps> = ({
             </div>
             <div className="flex flex-wrap gap-4">
                 <div className="w-48"><Select label="आर्थिक वर्ष" options={FISCAL_YEARS} value={selectedFiscalYear} onChange={(e) => setSelectedFiscalYear(e.target.value)} icon={<Calendar size={18} />} /></div>
-                <div className="w-80"><SearchableSelect label="सामानको नाम" options={itemOptions} value={selectedItemName} onChange={setSelectedItemName} placeholder="Search item..." icon={<Search size={18} />} /></div>
+                <div className="w-80"><SearchableSelect label="सामानको नाम (खोज्नुहोस्)" options={itemOptions} value={selectedItemName} onChange={setSelectedItemName} placeholder="सामानको नाम लेख्नुहोस्..." icon={<Search size={18} />} /></div>
             </div>
         </div>
         <button onClick={() => window.print()} disabled={!selectedItemName} className="px-6 py-2.5 bg-slate-800 text-white rounded-lg font-medium shadow-sm hover:bg-slate-900 transition-colors disabled:opacity-50"><Printer size={18} className="inline mr-2" /> प्रिन्ट</button>
@@ -234,13 +242,12 @@ export const JinshiKhata: React.FC<JinshiKhataProps> = ({
                 </div>
                 <div className="text-right">
                     <p>आर्थिक वर्ष: {selectedFiscalYear}</p>
-                    <p className="mt-1 font-normal text-slate-500">सङ्केत नं: {selectedItemDetail?.sanketNo || '-'}</p>
+                    <p className="mt-1 font-normal text-slate-500">सङ्केत नं: {selectedItemDetail?.sanketNo || selectedItemDetail?.uniqueCode || '-'}</p>
                 </div>
             </div>
         </div>
 
         {ledgerType === 'Expendable' ? (
-          /* --- EXPENDABLE TABLE (407) --- */
           <table className="w-full border-collapse border border-slate-900 text-center text-[11px]">
             <thead>
                 <tr className="bg-slate-50">
@@ -285,7 +292,6 @@ export const JinshiKhata: React.FC<JinshiKhataProps> = ({
             </tbody>
           </table>
         ) : (
-          /* --- NON-EXPENDABLE TABLE (408) --- */
           <table className="w-full border-collapse border border-slate-900 text-center text-[11px]">
             <thead>
                 <tr className="bg-slate-50">
@@ -332,7 +338,6 @@ export const JinshiKhata: React.FC<JinshiKhataProps> = ({
                             <td className="border border-slate-900 p-1">-</td>
                             <td className="border border-slate-900 p-1 font-medium">{row.source || '-'}</td>
 
-                            {/* आम्दानी महलमा फिर्ता (Return) लाई पनि देखाइनेछ */}
                             <td className="border border-slate-900 p-1 font-bold text-green-700">{(row.type === 'Income' || row.type === 'Opening' || row.type === 'Return') ? row.qty : ''}</td>
                             <td className="border border-slate-900 p-1">{(row.type === 'Income' || row.type === 'Opening' || row.type === 'Return') ? row.rate : ''}</td>
                             <td className="border border-slate-900 p-1">{(row.type === 'Income' || row.type === 'Opening' || row.type === 'Return') ? row.total.toFixed(2) : ''}</td>
@@ -341,7 +346,6 @@ export const JinshiKhata: React.FC<JinshiKhataProps> = ({
                             <td className="border border-slate-900 p-1">{row.type === 'Expense' ? row.rate : ''}</td>
                             <td className="border border-slate-900 p-1">{row.type === 'Expense' ? row.total.toFixed(2) : ''}</td>
 
-                            {/* बाँकी परिमाण (Running Balance) मा ५ -> ४ -> ५ को लजिक लागू हुन्छ */}
                             <td className="border border-slate-900 p-1 font-black bg-slate-50 text-base">{row.balQty}</td>
                             <td className="border border-slate-900 p-1 font-bold bg-slate-50">{row.balTotal.toFixed(2)}</td>
                             <td className="border border-slate-900 p-1 text-left px-1 italic text-[10px]">{row.remarks}</td>

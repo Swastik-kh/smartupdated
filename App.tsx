@@ -300,6 +300,7 @@ const App: React.FC = () => {
             const inventory: Record<string, InventoryItem> = invSnap.exists() ? invSnap.val() : {};
             const inventoryKeys = Object.keys(inventory);
 
+            // Fetch Mag Form to update receiver details
             const magFormSnap = await get(ref(db, `${orgPath}/magForms/${report.magFormId}`));
             let linkedMagForm: MagFormEntry | null = magFormSnap.exists() ? magFormSnap.val() : null;
 
@@ -373,12 +374,19 @@ const App: React.FC = () => {
             report.items = updatedReportItems;
 
             if (linkedMagForm) {
-                // IMPORTANT: If Mag Form is synced, we must update it in both places too
+                // AUTO-FILL RECEIVER DETAILS UPON ISSUE APPROVAL
+                linkedMagForm.receiver = {
+                    name: linkedMagForm.demandBy?.name || '',
+                    designation: linkedMagForm.demandBy?.designation || '',
+                    date: report.issueDate || report.requestDate
+                };
+
                 const sourceSafeName = linkedMagForm.sourceOrg?.trim().replace(/[.#$[\]]/g, "_");
                 const targetSafeName = linkedMagForm.targetOrg?.trim().replace(/[.#$[\]]/g, "_");
 
                 if (sourceSafeName) updates[`orgData/${sourceSafeName}/magForms/${linkedMagForm.id}`] = linkedMagForm;
                 if (targetSafeName) updates[`orgData/${targetSafeName}/magForms/${linkedMagForm.id}`] = linkedMagForm;
+                if (!linkedMagForm.isInstitutional) updates[`${orgPath}/magForms/${linkedMagForm.id}`] = linkedMagForm;
             }
         }
 
