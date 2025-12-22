@@ -40,6 +40,21 @@
         font-family: 'Inter', sans-serif;
       }
       .font-nepali { font-family: 'Mukta', sans-serif; }
+      
+      /* Print related styles */
+      @media print {
+        .no-print {
+          display: none !important;
+        }
+        body {
+          background-color: white !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        #root {
+          padding: 0 !important;
+        }
+      }
     </style>
   <script type="importmap">
 {

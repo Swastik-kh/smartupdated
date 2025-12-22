@@ -82,6 +82,7 @@ export const RabiesReport: React.FC<RabiesReportProps> = ({ currentFiscalYear, c
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 print:space-y-0 print:animate-none">
+      {/* Filters Area - Hidden in Print */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm no-print">
          <div className="flex items-end gap-4 w-full md:w-auto">
              <div className="w-48">
@@ -91,11 +92,11 @@ export const RabiesReport: React.FC<RabiesReportProps> = ({ currentFiscalYear, c
                 <Select label="महिना" options={nepaliMonthOptions} value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} icon={<Filter size={18} />} />
             </div>
          </div>
-         <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg font-medium shadow-sm"><Printer size={18} /> Print</button>
+         <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg font-medium shadow-sm"><Printer size={18} /> Print Report</button>
       </div>
 
       {/* Main Printable Area */}
-      <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-lg overflow-x-auto min-w-[1000px] print:min-w-full print:shadow-none print:border-none print:p-0 print:overflow-visible">
+      <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-lg overflow-x-auto min-w-[1000px] print:min-w-full print:shadow-none print:border-none print:p-0 print:overflow-visible print:mt-0">
         <div className="text-center space-y-1 mb-6 font-bold text-slate-900 print:mb-4">
             <h4 className="text-sm uppercase">NG/MOH</h4>
             <h3 className="text-base uppercase">EPIDEMIOLOGY AND DISEASE CONTROL DIVISION</h3>
