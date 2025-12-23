@@ -176,7 +176,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     { id: 'services', label: 'सेवा (Services)', icon: <Stethoscope size={20} />, subItems: [{ id: 'tb_leprosy', label: 'क्षयरोग/कुष्ठरोग (TB/Leprosy)', icon: <Activity size={16} /> }, { id: 'rabies', label: 'रेबिज खोप क्लिनिक (Rabies Vaccine)', icon: <Syringe size={16} /> }] },
     { id: 'inventory', label: 'जिन्सी व्यवस्थापन (Inventory)', icon: <Package size={20} />, subItems: [ { id: 'stock_entry_approval', label: 'स्टक प्रविष्टि अनुरोध (Stock Requests)', icon: <ClipboardCheck size={16} />, badgeCount: pendingStockRequestsCount }, { id: 'jinshi_maujdat', label: 'जिन्सी मौज्दात (Inventory Stock)', icon: <Warehouse size={16} /> }, { id: 'form_suchikaran', label: 'फर्म सुचीकरण (Firm Listing)', icon: <ClipboardList size={16} /> }, { id: 'quotation', label: 'सामानको कोटेशन (Quotation)', icon: <FileSpreadsheet size={16} /> }, { id: 'mag_faram', label: 'माग फारम (Demand Form)', icon: <FilePlus size={16} />, badgeCount: magFaramBadgeCount }, { id: 'kharid_adesh', label: 'खरिद आदेश (Purchase Order)', icon: <ShoppingCart size={16} /> }, { id: 'nikasha_pratibedan', label: 'निकासा प्रतिवेदन (Issue Report)', icon: <FileOutput size={16} /> }, { id: 'sahayak_jinshi_khata', label: 'सहायक जिन्सी खाता (Sub. Ledger)', icon: <BookOpen size={16} /> }, { id: 'jinshi_khata', label: 'जिन्सी खाता (Inventory Ledger)', icon: <Book size={16} /> }, { id: 'dakhila_pratibedan', label: 'दाखिला प्रतिवेदन (Entry Report)', icon: <Archive size={16} /> }, { id: 'jinshi_firta_khata', label: 'जिन्सी फिर्ता खाता (Return Ledger)', icon: <RotateCcw size={16} /> }, { id: 'marmat_adesh', label: 'मर्मत आवेदन/आदेश (Maintenance)', icon: <Wrench size={16} /> }, { id: 'dhuliyauna_faram', label: 'लिलाम / धुल्याउने (Disposal)', icon: <Trash2 size={16} /> }, { id: 'log_book', label: 'लग बुक (Log Book)', icon: <Scroll size={16} /> }] },
     { id: 'report', label: 'रिपोर्ट (Report)', icon: <FileText size={20} />, subItems: [{ id: 'report_tb_leprosy', label: 'क्षयरोग/कुष्ठरोग रिपोर्ट (TB/Leprosy)', icon: <Activity size={16} /> }, { id: 'report_rabies', label: 'रेबिज रिपोर्ट (Rabies Report)', icon: <Syringe size={16} /> }, { id: 'report_inventory_monthly', label: 'जिन्सी मासिक प्रतिवेदन (Monthly Report)', icon: <BarChart3 size={16} /> }] },
-    { id: 'settings', label: 'सेटिङ (Settings)', icon: <Settings size={20} />, subItems: [
+    { id: 'settings', label: 'सेटिङ र सुरक्षा (Settings & Security)', icon: <Settings size={20} />, subItems: [
         { id: 'general_setting', label: 'सामान्य सेटिङ (General Setting)', icon: <Sliders size={16} /> }, 
         { id: 'store_setup', label: 'स्टोर सेटअप (Store Setup)', icon: <Store size={16} /> }, 
         { id: 'user_management', label: 'प्रयोगकर्ता सेटअप (User Setup)', icon: <Users size={16} /> }, 
@@ -190,26 +190,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const allowedMenus = currentUser.allowedMenus || [];
 
     return allMenuItems.reduce<MenuItem[]>((acc, item) => {
+        // Dashboard and Settings are always processed
         if (item.id === 'dashboard') { acc.push(item); return acc; }
         
         if (item.id === 'settings') {
+            // Filter subItems for settings specifically
             const filteredSubItems = item.subItems?.filter(sub => {
-                if (sub.id === 'change_password') return true; // Everyone can change password
-                return isSuperOrAdmin; // Others are for Admin/Super Admin
+                // Change Password must be visible for everyone
+                if (sub.id === 'change_password') return true;
+                // Other settings only for Admin/Super Admin unless explicitly allowed
+                if (isSuperOrAdmin) return true;
+                return allowedMenus.includes(sub.id);
             });
+            
             if (filteredSubItems && filteredSubItems.length > 0) {
                 acc.push({ ...item, subItems: filteredSubItems });
             }
             return acc;
         }
 
+        // For Super Admin / Admin, show everything else too
         if (isSuperOrAdmin) { acc.push(item); return acc; }
 
+        // For Staff, filter by permissions
         const isParentAllowed = allowedMenus.includes(item.id);
         let filteredSubItems: MenuItem[] = [];
         if (item.subItems) {
-            filteredSubItems = item.subItems.filter(subItem => isParentAllowed || allowedMenus.includes(subItem.id));
+            filteredSubItems = item.subItems.filter(subItem => allowedMenus.includes(subItem.id));
         }
+        
         if (isParentAllowed || filteredSubItems.length > 0) {
             acc.push({ ...item, subItems: filteredSubItems.length > 0 ? filteredSubItems : undefined });
         }
