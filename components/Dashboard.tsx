@@ -117,30 +117,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const todayAd = new Date().toISOString().split('T')[0];
     const currentMonth = String(today.getMonth() + 1).padStart(2, '0');
     
-    // 1. Rabies Today Count (New Cases)
-    const todayRabies = rabiesPatients.filter(p => 
-      p.regDateBs === todayStr
-    ).length;
-
-    // 2. Rabies Follow-up Stats (Today)
-    const todayScheduled = rabiesPatients.filter(p => 
-      p.schedule.some(dose => dose.date === todayAd)
-    ).length;
-
-    const todayCompleted = rabiesPatients.filter(p => 
-      p.schedule.some(dose => dose.date === todayAd && dose.status === 'Given')
-    ).length;
-
+    const todayRabies = rabiesPatients.filter(p => p.regDateBs === todayStr).length;
+    const todayScheduled = rabiesPatients.filter(p => p.schedule.some(dose => dose.date === todayAd)).length;
+    const todayCompleted = rabiesPatients.filter(p => p.schedule.some(dose => dose.date === todayAd && dose.status === 'Given')).length;
     const todayPending = todayScheduled - todayCompleted;
-
-    // 3. Vaccine Expenditure Calculation (TODAY)
-    // Assuming 2 doses per patient visit
     const totalDosesExpendedToday = (todayRabies + todayCompleted) * 2;
 
-    // 4. FUTURE FORECAST: DAILY VIAL WASTE LOGIC
     const futureDailyDoses: Record<string, number> = {};
     let totalPendingFutureFollowups = 0;
-
     rabiesPatients.forEach(patient => {
         patient.schedule.forEach(dose => {
             if (dose.status === 'Pending') {
@@ -152,33 +136,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
     
     const totalFutureDosesNeeded = totalPendingFutureFollowups * 2;
-
     let totalFutureVials1ml = 0;
     let totalFutureVials05ml = 0;
-    
     Object.keys(futureDailyDoses).forEach(date => {
         const dailyDoses = futureDailyDoses[date];
         totalFutureVials1ml += Math.ceil(dailyDoses / 10);
         totalFutureVials05ml += Math.ceil(dailyDoses / 5);
     });
 
-    const monthlyRabies = rabiesPatients.filter(p => 
-      p.fiscalYear === currentFiscalYear && 
-      p.regMonth === currentMonth
-    ).length;
+    const monthlyRabies = rabiesPatients.filter(p => p.fiscalYear === currentFiscalYear && p.regMonth === currentMonth).length;
 
     return { 
-      todayRabies, 
-      todayScheduled,
-      todayCompleted,
-      todayPending,
-      totalDosesExpendedToday,
-      totalPendingFutureFollowups,
-      totalFutureDosesNeeded,
-      futureVials1ml: totalFutureVials1ml,
-      futureVials05ml: totalFutureVials05ml, 
-      monthlyRabies, 
-      totalInventory: inventoryItems.length, 
+      todayRabies, todayScheduled, todayCompleted, todayPending, totalDosesExpendedToday,
+      totalPendingFutureFollowups, totalFutureDosesNeeded, futureVials1ml: totalFutureVials1ml,
+      futureVials05ml: totalFutureVials05ml, monthlyRabies, totalInventory: inventoryItems.length, 
       pendingMagForms: magForms.filter(f => f.status === 'Pending').length, 
       pendingStockReq: stockEntryRequests.filter(r => r.status === 'Pending').length 
     };
@@ -195,12 +166,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const pendingStockRequestsCount = stockEntryRequests.filter(r => r.status === 'Pending').length;
   
   const magFaramBadgeCount = useMemo(() => {
-      if (currentUser.role === 'STOREKEEPER') {
-          return magForms.filter(f => f.status === 'Pending').length;
-      }
-      if (['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) {
-          return magForms.filter(f => f.status === 'Verified').length;
-      }
+      if (currentUser.role === 'STOREKEEPER') return magForms.filter(f => f.status === 'Pending').length;
+      if (['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) return magForms.filter(f => f.status === 'Verified').length;
       return 0;
   }, [magForms, currentUser.role]);
 
@@ -209,43 +176,53 @@ export const Dashboard: React.FC<DashboardProps> = ({
     { id: 'services', label: 'सेवा (Services)', icon: <Stethoscope size={20} />, subItems: [{ id: 'tb_leprosy', label: 'क्षयरोग/कुष्ठरोग (TB/Leprosy)', icon: <Activity size={16} /> }, { id: 'rabies', label: 'रेबिज खोप क्लिनिक (Rabies Vaccine)', icon: <Syringe size={16} /> }] },
     { id: 'inventory', label: 'जिन्सी व्यवस्थापन (Inventory)', icon: <Package size={20} />, subItems: [ { id: 'stock_entry_approval', label: 'स्टक प्रविष्टि अनुरोध (Stock Requests)', icon: <ClipboardCheck size={16} />, badgeCount: pendingStockRequestsCount }, { id: 'jinshi_maujdat', label: 'जिन्सी मौज्दात (Inventory Stock)', icon: <Warehouse size={16} /> }, { id: 'form_suchikaran', label: 'फर्म सुचीकरण (Firm Listing)', icon: <ClipboardList size={16} /> }, { id: 'quotation', label: 'सामानको कोटेशन (Quotation)', icon: <FileSpreadsheet size={16} /> }, { id: 'mag_faram', label: 'माग फारम (Demand Form)', icon: <FilePlus size={16} />, badgeCount: magFaramBadgeCount }, { id: 'kharid_adesh', label: 'खरिद आदेश (Purchase Order)', icon: <ShoppingCart size={16} /> }, { id: 'nikasha_pratibedan', label: 'निकासा प्रतिवेदन (Issue Report)', icon: <FileOutput size={16} /> }, { id: 'sahayak_jinshi_khata', label: 'सहायक जिन्सी खाता (Sub. Ledger)', icon: <BookOpen size={16} /> }, { id: 'jinshi_khata', label: 'जिन्सी खाता (Inventory Ledger)', icon: <Book size={16} /> }, { id: 'dakhila_pratibedan', label: 'दाखिला प्रतिवेदन (Entry Report)', icon: <Archive size={16} /> }, { id: 'jinshi_firta_khata', label: 'जिन्सी फिर्ता खाता (Return Ledger)', icon: <RotateCcw size={16} /> }, { id: 'marmat_adesh', label: 'मर्मत आवेदन/आदेश (Maintenance)', icon: <Wrench size={16} /> }, { id: 'dhuliyauna_faram', label: 'लिलाम / धुल्याउने (Disposal)', icon: <Trash2 size={16} /> }, { id: 'log_book', label: 'लग बुक (Log Book)', icon: <Scroll size={16} /> }] },
     { id: 'report', label: 'रिपोर्ट (Report)', icon: <FileText size={20} />, subItems: [{ id: 'report_tb_leprosy', label: 'क्षयरोग/कुष्ठरोग रिपोर्ट (TB/Leprosy)', icon: <Activity size={16} /> }, { id: 'report_rabies', label: 'रेबिज रिपोर्ट (Rabies Report)', icon: <Syringe size={16} /> }, { id: 'report_inventory_monthly', label: 'जिन्सी मासिक प्रतिवेदन (Monthly Report)', icon: <BarChart3 size={16} /> }] },
-    { id: 'settings', label: 'सेटिङ (Settings)', icon: <Settings size={20} />, subItems: [{ id: 'general_setting', label: 'सामान्य सेटिङ (General Setting)', icon: <Sliders size={16} /> }, { id: 'store_setup', label: 'स्टोर सेटअप (Store Setup)', icon: <Store size={16} /> }, { id: 'prayog_setup', label: 'प्रयोग सेटअप (Prayog Setup)', icon: <UserCog size={16} />, subItems: [{ id: 'user_management', label: 'प्रयोगकर्ता सेटअप (User Setup)', icon: <Users size={16} /> }] }, { id: 'security', label: 'सुरक्षा (Security)', icon: <ShieldCheck size={16} />, subItems: [{ id: 'change_password', label: 'पासवर्ड परिवर्तन (Change Password)', icon: <KeyRound size={16} /> }] }, { id: 'database_management', label: 'डाटाबेस व्यवस्थापन (Database Management)', icon: <Database size={16} /> }] }
+    { id: 'settings', label: 'सेटिङ (Settings)', icon: <Settings size={20} />, subItems: [
+        { id: 'general_setting', label: 'सामान्य सेटिङ (General Setting)', icon: <Sliders size={16} /> }, 
+        { id: 'store_setup', label: 'स्टोर सेटअप (Store Setup)', icon: <Store size={16} /> }, 
+        { id: 'user_management', label: 'प्रयोगकर्ता सेटअप (User Setup)', icon: <Users size={16} /> }, 
+        { id: 'change_password', label: 'पासवर्ड परिवर्तन (Change Password)', icon: <KeyRound size={16} /> }, 
+        { id: 'database_management', label: 'डाटाबेस व्यवस्थापन (Database Management)', icon: <Database size={16} /> }
+    ] }
   ];
 
-  const menuItems = allMenuItems.reduce<MenuItem[]>((acc, item) => {
-    if (item.id === 'dashboard') { acc.push(item); return acc; }
-    if (item.id === 'settings') {
-      const isSuperOrAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
-      const allowedSubItems = item.subItems?.filter(subItem => {
-        if (subItem.id === 'security') return true; 
-        return isSuperOrAdmin; 
-      });
-      if (allowedSubItems && allowedSubItems.length > 0) acc.push({ ...item, subItems: allowedSubItems });
-      return acc;
-    }
+  const menuItems = useMemo(() => {
     const isSuperOrAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
-    if (isSuperOrAdmin) { acc.push(item); return acc; }
     const allowedMenus = currentUser.allowedMenus || [];
-    const isParentAllowed = allowedMenus.includes(item.id);
-    let filteredSubItems: MenuItem[] = [];
-    if (item.subItems) {
-        filteredSubItems = item.subItems.filter(subItem => isParentAllowed || allowedMenus.includes(subItem.id));
-    }
-    if (isParentAllowed || filteredSubItems.length > 0) {
-      const newItem = { ...item };
-      if (filteredSubItems.length > 0) newItem.subItems = filteredSubItems;
-      acc.push(newItem);
-    }
-    return acc;
-  }, []);
+
+    return allMenuItems.reduce<MenuItem[]>((acc, item) => {
+        if (item.id === 'dashboard') { acc.push(item); return acc; }
+        
+        if (item.id === 'settings') {
+            const filteredSubItems = item.subItems?.filter(sub => {
+                if (sub.id === 'change_password') return true; // Everyone can change password
+                return isSuperOrAdmin; // Others are for Admin/Super Admin
+            });
+            if (filteredSubItems && filteredSubItems.length > 0) {
+                acc.push({ ...item, subItems: filteredSubItems });
+            }
+            return acc;
+        }
+
+        if (isSuperOrAdmin) { acc.push(item); return acc; }
+
+        const isParentAllowed = allowedMenus.includes(item.id);
+        let filteredSubItems: MenuItem[] = [];
+        if (item.subItems) {
+            filteredSubItems = item.subItems.filter(subItem => isParentAllowed || allowedMenus.includes(subItem.id));
+        }
+        if (isParentAllowed || filteredSubItems.length > 0) {
+            acc.push({ ...item, subItems: filteredSubItems.length > 0 ? filteredSubItems : undefined });
+        }
+        return acc;
+    }, []);
+  }, [currentUser, allMenuItems]);
 
   const handleMenuClick = (item: MenuItem) => {
     if (item.subItems) setExpandedMenu(expandedMenu === item.id ? null : item.id);
-    else { setActiveItem(item.id); setExpandedMenu(null); setExpandedSubMenu(null); setIsSidebarOpen(false); }
+    else { setActiveItem(item.id); setExpandedMenu(null); setIsSidebarOpen(false); }
   };
 
   const handleSubItemClick = (subItemId: string) => { setActiveItem(subItemId); setIsSidebarOpen(false); };
-  const handleLevel3Click = (subItemId: string) => { setExpandedSubMenu(expandedSubMenu === subItemId ? null : subItemId); };
   const handleDakhilaFromPo = (po: PurchaseOrderEntry) => { setPendingPoDakhila(po); setActiveItem('jinshi_maujdat'); };
 
   const renderContent = () => {
@@ -320,7 +297,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
              {menuItems.map((item) => (
                <div key={item.id}>
                   <button onClick={() => handleMenuClick(item)} className={`w-full flex items-start justify-between px-4 py-3 rounded-xl transition-all duration-200 group ${activeItem === item.id ? 'bg-primary-600 text-white shadow-lg' : (expandedMenu === item.id ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800')}`}><div className="flex items-start gap-3"><div className={`mt-0.5 ${activeItem === item.id ? 'text-white' : 'group-hover:text-primary-400'}`}>{item.icon}</div><span className="font-medium font-nepali text-left leading-snug">{item.label}</span></div>{item.subItems && <div className="text-slate-500 mt-1">{expandedMenu === item.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</div>}</button>
-                  {item.subItems && expandedMenu === item.id && (<div className="mt-1 ml-4 pl-3 border-l border-slate-700 space-y-1">{item.subItems.map((subItem) => (<div key={subItem.id}><button onClick={() => subItem.subItems ? handleLevel3Click(subItem.id) : handleSubItemClick(subItem.id)} className={`w-full flex items-start justify-between px-4 py-2.5 rounded-lg text-sm transition-colors ${activeItem === subItem.id ? 'bg-slate-800 text-primary-300 font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}><div className="flex items-start gap-2"><div className="mt-0.5">{subItem.icon}</div><span className="font-nepali text-left leading-normal">{subItem.label}</span></div><div className="flex items-center gap-2 mt-0.5">{subItem.badgeCount !== undefined && subItem.badgeCount > 0 && (<span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.2rem] text-center">{subItem.badgeCount}</span>)}{subItem.subItems && (expandedSubMenu === subItem.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}</div></button></div>))}</div>)}
+                  {item.subItems && expandedMenu === item.id && (<div className="mt-1 ml-4 pl-3 border-l border-slate-700 space-y-1">{item.subItems.map((subItem) => (<div key={subItem.id}><button onClick={() => handleSubItemClick(subItem.id)} className={`w-full flex items-start justify-between px-4 py-2.5 rounded-lg text-sm transition-colors ${activeItem === subItem.id ? 'bg-slate-800 text-primary-300 font-medium' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}><div className="flex items-start gap-2"><div className="mt-0.5">{subItem.icon}</div><span className="font-nepali text-left leading-normal">{subItem.label}</span></div><div className="flex items-center gap-2 mt-0.5">{subItem.badgeCount !== undefined && subItem.badgeCount > 0 && (<span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.2rem] text-center">{subItem.badgeCount}</span>)}</div></button></div>))}</div>)}
                </div>
              ))}
         </nav>
