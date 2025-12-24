@@ -4,7 +4,7 @@ import { LoginForm } from './components/LoginForm';
 import { Dashboard } from './components/Dashboard';
 import { APP_NAME, ORG_NAME } from './constants';
 import { Landmark, ShieldCheck } from 'lucide-react';
-import { User, OrganizationSettings, MagFormEntry, RabiesPatient, PurchaseOrderEntry, IssueReportEntry, FirmEntry, QuotationEntry, InventoryItem, Store, StockEntryRequest, DakhilaPratibedanEntry, ReturnEntry, MarmatEntry, DhuliyaunaEntry, LogBookEntry, DakhilaItem } from './types';
+import { User, OrganizationSettings, MagFormEntry, RabiesPatient, PurchaseOrderEntry, IssueReportEntry, FirmEntry, QuotationEntry, InventoryItem, Store, StockEntryRequest, DakhilaPratibedanEntry, ReturnEntry, MarmatEntry, DhuliyaunaEntry, LogBookEntry, DakhilaItem, TBPatient } from './types';
 import { db } from './firebase';
 import { ref, onValue, set, remove, update, get, Unsubscribe } from "firebase/database";
 
@@ -54,6 +54,7 @@ const App: React.FC = () => {
   const [firms, setFirms] = useState<FirmEntry[]>([]);
   const [quotations, setQuotations] = useState<QuotationEntry[]>([]);
   const [rabiesPatients, setRabiesPatients] = useState<RabiesPatient[]>([]);
+  const [tbPatients, setTbPatients] = useState<TBPatient[]>([]);
   const [marmatEntries, setMarmatEntries] = useState<MarmatEntry[]>([]);
   const [dhuliyaunaEntries, setDhuliyaunaEntries] = useState<DhuliyaunaEntry[]>([]);
   const [logBookEntries, setLogBookEntries] = useState<LogBookEntry[]>([]);
@@ -100,6 +101,7 @@ const App: React.FC = () => {
         setFirms([]);
         setQuotations([]);
         setRabiesPatients([]);
+        setTbPatients([]);
         setMarmatEntries([]);
         setDhuliyaunaEntries([]);
         setLogBookEntries([]);
@@ -139,6 +141,7 @@ const App: React.FC = () => {
     setupOrgListener('firms', setFirms);
     setupOrgListener('quotations', setQuotations);
     setupOrgListener('rabiesPatients', setRabiesPatients);
+    setupOrgListener('tbPatients', setTbPatients);
     setupOrgListener('marmatEntries', setMarmatEntries);
     setupOrgListener('disposalEntries', setDhuliyaunaEntries);
     setupOrgListener('logBook', setLogBookEntries);
@@ -556,6 +559,22 @@ const App: React.FC = () => {
               }
           }}
           onDeletePatient={(id) => remove(getOrgRef(`rabiesPatients/${id}`))}
+          tbPatients={tbPatients}
+          onAddTBPatient={async (p) => {
+              try {
+                  await set(getOrgRef(`tbPatients/${p.id}`), p);
+              } catch (e) {
+                  console.error("Firebase error adding TB patient:", e);
+              }
+          }}
+          onUpdateTBPatient={async (p) => {
+              try {
+                  await set(getOrgRef(`tbPatients/${p.id}`), p);
+              } catch (e) {
+                  console.error("Firebase error updating TB patient:", e);
+              }
+          }}
+          onDeleteTBPatient={(id) => remove(getOrgRef(`tbPatients/${id}`))}
           firms={firms}
           onAddFirm={(f) => set(getOrgRef(`firms/${f.id}`), f)}
           quotations={quotations}

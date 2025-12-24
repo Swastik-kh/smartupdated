@@ -85,6 +85,33 @@ export interface RabiesPatient {
   schedule: VaccinationDose[];
 }
 
+export interface TBReport {
+  month: number;
+  result: string;
+  labNo: string;
+  date: string;
+  dateNepali?: string;
+}
+
+export interface TBPatient {
+  id: string;
+  patientId: string;
+  name: string;
+  age: string;
+  address: string;
+  phone: string;
+  regType: string;
+  classification: string;
+  registrationDate: string;
+  fiscalYear: string;
+  labResultMonth2Positive?: boolean; 
+  completedSchedule: number[]; 
+  newReportAvailable?: boolean; 
+  latestResult?: string; 
+  latestReportMonth?: number; 
+  reports: TBReport[]; 
+}
+
 export interface MagItem {
   id: number;
   name: string;
@@ -424,6 +451,11 @@ export interface DashboardProps {
   onAddRabiesPatient: (patient: RabiesPatient) => void;
   onUpdateRabiesPatient: (patient: RabiesPatient) => void;
   onDeletePatient: (patientId: string) => void; 
+
+  tbPatients: TBPatient[];
+  onAddTBPatient: (patient: TBPatient) => void;
+  onUpdateTBPatient: (patient: TBPatient) => void;
+  onDeleteTBPatient: (patientId: string) => void;
 
   firms: FirmEntry[];
   onAddFirm: (firm: FirmEntry) => void;
