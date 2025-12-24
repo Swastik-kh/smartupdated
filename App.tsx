@@ -540,8 +540,21 @@ const App: React.FC = () => {
           issueReports={issueReports}
           onUpdateIssueReport={handleApproveIssueReport} 
           rabiesPatients={rabiesPatients}
-          onAddRabiesPatient={(p) => set(getOrgRef(`rabiesPatients/${p.id}`), p)}
-          onUpdateRabiesPatient={(p) => set(getOrgRef(`rabiesPatients/${p.id}`), p)}
+          onAddRabiesPatient={async (p) => {
+              try {
+                  await set(getOrgRef(`rabiesPatients/${p.id}`), p);
+              } catch (e) {
+                  console.error("Firebase error adding rabies patient:", e);
+                  alert("डाटाबेस सुरक्षित गर्न सकिएन।");
+              }
+          }}
+          onUpdateRabiesPatient={async (p) => {
+              try {
+                  await set(getOrgRef(`rabiesPatients/${p.id}`), p);
+              } catch (e) {
+                  console.error("Firebase error updating rabies patient:", e);
+              }
+          }}
           onDeletePatient={(id) => remove(getOrgRef(`rabiesPatients/${id}`))}
           firms={firms}
           onAddFirm={(f) => set(getOrgRef(`firms/${f.id}`), f)}

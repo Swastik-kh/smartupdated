@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, UserManagementProps, UserRole, Option } from '../types';
 import { Plus, Trash2, Shield, User as UserIcon, Building2, Save, X, Phone, Briefcase, IdCard, Users, Pencil, CheckSquare, Square, ChevronDown, ChevronRight, CornerDownRight, Store } from 'lucide-react';
 import { Input } from './Input';
@@ -18,12 +18,13 @@ const PERMISSION_STRUCTURE = [
         id: 'inventory', 
         label: 'जिन्सी व्यवस्थापन (Inventory)',
         children: [
+            { id: 'stock_entry_approval', label: 'स्टक प्रविष्टि अनुरोध (Stock Requests)' },
+            { id: 'jinshi_maujdat', label: 'जिन्सी मौज्दात (Inventory Stock)' }, 
             { id: 'form_suchikaran', label: 'फर्म सुचीकरण (Firm Listing)' },
             { id: 'quotation', label: 'सामानको कोटेशन (Quotation)' },
             { id: 'mag_faram', label: 'माग फारम (Demand Form)' },
             { id: 'kharid_adesh', label: 'खरिद आदेश (Purchase Order)' },
             { id: 'nikasha_pratibedan', label: 'निकासा प्रतिवेदन (Issue Report)' },
-            { id: 'jinshi_maujdat', label: 'जिन्सी मौज्दात (Inventory Stock)' }, 
             { id: 'sahayak_jinshi_khata', label: 'सहायक जिन्सी खाता (Sub. Ledger)' },
             { id: 'jinshi_khata', label: 'जिन्सी खाता (Inventory Ledger)' },
             { id: 'dakhila_pratibedan', label: 'दाखिला प्रतिवेदन (Entry Report)' },
@@ -48,7 +49,6 @@ const PERMISSION_STRUCTURE = [
         children: [
             { id: 'general_setting', label: 'सामान्य सेटिङ (General Setting)' },
             { id: 'store_setup', label: 'स्टोर सेटअप (Store Setup)' },
-            { id: 'user_management', label: 'प्रयोगकर्ता सेटअप (User Setup)' },
             { id: 'database_management', label: 'डाटाबेस व्यवस्थापन (Database Management)' },
         ]
     }
@@ -63,7 +63,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [expandedPermissions, setExpandedPermissions] = useState<string[]>(['services', 'inventory', 'report']);
 
   const [formData, setFormData] = useState<{
     username: string;
@@ -80,7 +79,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     fullName: '',
     designation: '',
     phoneNumber: '',
-    organizationName: '',
+    organizationName: currentUser.role === 'ADMIN' ? currentUser.organizationName : '',
     role: 'STAFF',
     allowedMenus: ['dashboard', 'change_password']
   });
@@ -100,62 +99,81 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     return false;
   });
 
-  const resetForm = () => {
-      setFormData({ 
-        username: '', password: '', fullName: '', designation: '', phoneNumber: '',
-        organizationName: currentUser.role === 'ADMIN' ? currentUser.organizationName : '',
-        role: 'STAFF', allowedMenus: ['dashboard', 'change_password']
-      });
-      setEditingId(null);
+  const handleAddNew = () => {
+    setEditingId(null);
+    setFormData({ 
+      username: '', 
+      password: '', 
+      fullName: '', 
+      designation: '', 
+      phoneNumber: '',
+      organizationName: currentUser.role === 'ADMIN' ? currentUser.organizationName : '',
+      role: 'STAFF', 
+      allowedMenus: ['dashboard', 'change_password']
+    });
+    setShowForm(true);
   };
 
   const handleEditClick = (user: User) => {
-      setEditingId(user.id);
-      setFormData({
-          username: user.username, password: user.password, fullName: user.fullName, designation: user.designation,
-          phoneNumber: user.phoneNumber, organizationName: user.organizationName, role: user.role,
-          allowedMenus: user.allowedMenus || ['dashboard', 'change_password']
-      });
-      setShowForm(true);
+    setEditingId(user.id);
+    setFormData({
+      username: user.username, 
+      password: user.password, 
+      fullName: user.fullName, 
+      designation: user.designation,
+      phoneNumber: user.phoneNumber, 
+      organizationName: user.organizationName, 
+      role: user.role,
+      allowedMenus: user.allowedMenus || ['dashboard', 'change_password']
+    });
+    setShowForm(true);
   };
 
   const togglePermission = (menuId: string) => {
-      setFormData(prev => {
-          const current = prev.allowedMenus;
-          if (current.includes(menuId)) return { ...prev, allowedMenus: current.filter(id => id !== menuId) };
-          return { ...prev, allowedMenus: [...current, menuId] };
-      });
+    setFormData(prev => {
+      const current = prev.allowedMenus;
+      if (current.includes(menuId)) return { ...prev, allowedMenus: current.filter(id => id !== menuId) };
+      return { ...prev, allowedMenus: [...current, menuId] };
+    });
   };
 
   const toggleParentPermission = (parentId: string, childrenIds: string[]) => {
-      const isParentChecked = formData.allowedMenus.includes(parentId);
-      setFormData(prev => {
-          let newMenus = [...prev.allowedMenus];
-          if (isParentChecked) newMenus = newMenus.filter(id => id !== parentId && !childrenIds.includes(id));
-          else {
-              newMenus = newMenus.filter(id => id !== parentId && !childrenIds.includes(id));
-              newMenus.push(parentId, ...childrenIds);
-          }
-          return { ...prev, allowedMenus: newMenus };
-      });
+    const isParentChecked = formData.allowedMenus.includes(parentId);
+    setFormData(prev => {
+      let newMenus = [...prev.allowedMenus];
+      if (isParentChecked) {
+        newMenus = newMenus.filter(id => id !== parentId && !childrenIds.includes(id));
+      } else {
+        newMenus = Array.from(new Set([...newMenus, parentId, ...childrenIds]));
+      }
+      return { ...prev, allowedMenus: newMenus };
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canManageUsers) return;
+
+    // Ensure dashboard and change_password are always included
     const finalMenus = Array.from(new Set([...formData.allowedMenus, 'dashboard', 'change_password']));
+    
     const userToSave: User = {
-        id: editingId || Date.now().toString(),
-        username: formData.username, password: formData.password, 
-        role: currentUser.role === 'SUPER_ADMIN' ? 'ADMIN' : formData.role,
-        fullName: formData.fullName, designation: formData.designation, 
-        phoneNumber: formData.phoneNumber, organizationName: formData.organizationName,
-        allowedMenus: finalMenus
+      id: editingId || Date.now().toString(),
+      username: formData.username.trim(), 
+      password: formData.password.trim(), 
+      role: currentUser.role === 'SUPER_ADMIN' ? 'ADMIN' : formData.role,
+      fullName: formData.fullName.trim(), 
+      designation: formData.designation.trim(), 
+      phoneNumber: formData.phoneNumber.trim(), 
+      organizationName: formData.organizationName.trim(),
+      allowedMenus: finalMenus
     };
+
     if (editingId) onUpdateUser(userToSave);
     else onAddUser(userToSave);
+    
     setShowForm(false);
-    resetForm();
+    alert('प्रयोगकर्ताको विवरण सफलतापूर्वक सुरक्षित गरियो।');
   };
 
   if (!canManageUsers) return null;
@@ -163,38 +181,94 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div><h2 className="text-xl font-bold text-slate-800 font-nepali">प्रयोगकर्ता व्यवस्थापन</h2></div>
-        {!showForm && (<button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors shadow-sm"><Plus size={18} /><span className="font-nepali">नयाँ प्रयोगकर्ता</span></button>)}
+        <div>
+          <h2 className="text-xl font-bold text-slate-800 font-nepali">प्रयोगकर्ता व्यवस्थापन (User Management)</h2>
+          <p className="text-sm text-slate-500">प्रणाली चलाउने कर्मचारी र तिनीहरूको पहुँच नियन्त्रण गर्नुहोस्</p>
+        </div>
+        {!showForm && (
+          <button 
+            onClick={handleAddNew} 
+            className="flex items-center gap-2 bg-primary-600 text-white px-6 py-2.5 rounded-xl hover:bg-primary-700 transition-all shadow-lg shadow-primary-200 font-bold"
+          >
+            <Plus size={20} />
+            <span className="font-nepali">नयाँ प्रयोगकर्ता थप्नुहोस्</span>
+          </button>
+        )}
       </div>
 
       {showForm && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-4">
-          <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-4">
-            <Input label="पूरा नाम" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} required icon={<IdCard size={16} />} />
-            <Input label="पद" value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})} required icon={<Briefcase size={16} />} />
-            <Input label="फोन नं." value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} required icon={<Phone size={16} />} />
-            <Input label="संस्थाको नाम" value={formData.organizationName} onChange={e => setFormData({...formData, organizationName: e.target.value})} required readOnly={currentUser.role === 'ADMIN'} className={currentUser.role === 'ADMIN' ? 'bg-slate-50' : ''} icon={<Building2 size={16} />} />
-            {currentUser.role === 'ADMIN' && (<Select label="भूमिका (Role)" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})} options={availableRoles} icon={<Users size={16} />} />)}
-            <Input label="प्रयोगकर्ताको नाम" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required icon={<UserIcon size={16} />} />
-            <Input label="पासवर्ड" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required type="password" />
+        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+              <h3 className="text-lg font-bold text-slate-700 font-nepali flex items-center gap-2">
+                <UserIcon className="text-primary-600" />
+                {editingId ? 'प्रयोगकर्ता परिमार्जन (Edit User)' : 'नयाँ प्रयोगकर्ता दर्ता (New User Registration)'}
+              </h3>
+              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-red-500 p-1 rounded-full hover:bg-red-50 transition-all"><X size={24} /></button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
+            <Input label="पूरा नाम (Full Name)" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} required icon={<IdCard size={18} />} />
+            <Input label="पद (Designation)" value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})} required icon={<Briefcase size={18} />} />
+            <Input label="फोन नं. (Phone Number)" value={formData.phoneNumber} onChange={e => setFormData({...formData, phoneNumber: e.target.value})} required icon={<Phone size={18} />} />
+            <Input 
+                label="संस्थाको नाम (Organization)" 
+                value={formData.organizationName} 
+                onChange={e => setFormData({...formData, organizationName: e.target.value})} 
+                required 
+                readOnly={currentUser.role === 'ADMIN'} 
+                className={currentUser.role === 'ADMIN' ? 'bg-slate-50 font-bold' : ''} 
+                icon={<Building2 size={18} />} 
+            />
+            {currentUser.role === 'ADMIN' && (
+                <Select 
+                    label="भूमिका (Role)" 
+                    value={formData.role} 
+                    onChange={e => setFormData({...formData, role: e.target.value as UserRole})} 
+                    options={availableRoles} 
+                    icon={<Users size={18} />} 
+                />
+            )}
+            <Input label="प्रयोगकर्ताको नाम (Username)" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required icon={<UserIcon size={18} />} />
+            <Input label="पासवर्ड (Password)" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required type="password" />
             
-            <div className="md:col-span-2 mt-4 bg-slate-50 p-4 rounded-lg border">
-                <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><Shield size={16} /> मेनु अनुमति (Menu Permissions)</h4>
-                <div className="space-y-2">
+            <div className="md:col-span-2 mt-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-2">
+                    <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <Shield size={18} className="text-primary-600" /> पहुँच अनुमति (Menu Permissions)
+                    </h4>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Select accessible features</span>
+                </div>
+                
+                <div className="grid sm:grid-cols-2 gap-6">
                     {PERMISSION_STRUCTURE.map((group) => {
                         const childrenIds = group.children.map(c => c.id);
-                        const allChecked = childrenIds.every(id => formData.allowedMenus.includes(id));
+                        const checkedChildren = childrenIds.filter(id => formData.allowedMenus.includes(id));
+                        const isAllChecked = checkedChildren.length === childrenIds.length;
+                        const isIndeterminate = checkedChildren.length > 0 && checkedChildren.length < childrenIds.length;
+
                         return (
-                            <div key={group.id} className="border rounded bg-white">
-                                <div className="flex items-center gap-3 p-2 bg-slate-50/50">
-                                    <button type="button" onClick={() => toggleParentPermission(group.id, childrenIds)} className={allChecked ? 'text-primary-600' : 'text-slate-300'}>{allChecked ? <CheckSquare size={18} /> : <Square size={18} />}</button>
-                                    <span className="font-bold text-xs">{group.label}</span>
+                            <div key={group.id} className="border rounded-xl bg-white shadow-sm overflow-hidden">
+                                <div className="flex items-center gap-3 p-3 bg-slate-100/50 border-b border-slate-100">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => toggleParentPermission(group.id, childrenIds)} 
+                                        className={isAllChecked ? 'text-primary-600' : isIndeterminate ? 'text-primary-400' : 'text-slate-300'}
+                                    >
+                                        {isAllChecked ? <CheckSquare size={20} /> : <Square size={20} />}
+                                    </button>
+                                    <span className="font-bold text-xs text-slate-700">{group.label}</span>
                                 </div>
-                                <div className="p-2 grid grid-cols-2 gap-2">
+                                <div className="p-3 space-y-2">
                                     {group.children.map(child => (
-                                        <div key={child.id} onClick={() => togglePermission(child.id)} className="flex items-center gap-2 cursor-pointer p-1 hover:bg-slate-50">
-                                            <div className={formData.allowedMenus.includes(child.id) ? 'text-primary-600' : 'text-slate-300'}>{formData.allowedMenus.includes(child.id) ? <CheckSquare size={14} /> : <Square size={14} />}</div>
-                                            <span className="text-[11px]">{child.label}</span>
+                                        <div 
+                                            key={child.id} 
+                                            onClick={() => togglePermission(child.id)} 
+                                            className={`flex items-center gap-3 cursor-pointer p-2 rounded-lg transition-colors group ${formData.allowedMenus.includes(child.id) ? 'bg-primary-50' : 'hover:bg-slate-50'}`}
+                                        >
+                                            <div className={formData.allowedMenus.includes(child.id) ? 'text-primary-600' : 'text-slate-300 group-hover:text-slate-400'}>
+                                                {formData.allowedMenus.includes(child.id) ? <CheckSquare size={16} /> : <Square size={16} />}
+                                            </div>
+                                            <span className={`text-[11px] font-medium ${formData.allowedMenus.includes(child.id) ? 'text-primary-800' : 'text-slate-600'}`}>{child.label}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -204,35 +278,71 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 </div>
             </div>
 
-            <div className="md:col-span-2 flex justify-end gap-3 mt-4 pt-4 border-t">
-              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-slate-600">रद्द</button>
-              <button type="submit" className="bg-primary-600 text-white px-6 py-2 rounded-lg font-bold">सुरक्षित गर्नुहोस्</button>
+            <div className="md:col-span-2 flex justify-end gap-3 mt-6 pt-6 border-t border-slate-100">
+              <button type="button" onClick={() => setShowForm(false)} className="px-6 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-all">रद्द (Cancel)</button>
+              <button type="submit" className="bg-primary-600 text-white px-10 py-2.5 rounded-xl font-bold shadow-lg shadow-primary-200 hover:bg-primary-700 active:scale-95 transition-all">
+                <Save size={20} className="inline mr-2" /> 
+                {editingId ? 'अपडेट गर्नुहोस्' : 'सुरक्षित गर्नुहोस्'}
+              </button>
             </div>
           </form>
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 border-b">
-            <tr>
-              <th className="px-6 py-4">प्रयोगकर्ता</th>
-              <th className="px-6 py-4">भूमिका</th>
-              <th className="px-6 py-4">संस्था</th>
-              <th className="px-6 py-4 text-right">कार्य</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {managedUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-medium">{user.fullName} (@{user.username})</td>
-                  <td className="px-6 py-4"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-50 text-blue-700">{user.role}</span></td>
-                  <td className="px-6 py-4 text-slate-600">{user.organizationName}</td>
-                  <td className="px-6 py-4 text-right"><div className="flex justify-end gap-2"><button onClick={() => handleEditClick(user)} className="text-primary-400 p-1"><Pencil size={16} /></button><button onClick={() => onDeleteUser(user.id)} className="text-red-400 p-1"><Trash2 size={16} /></button></div></td>
-                </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-lg shadow-slate-100">
+        <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+            <h3 className="font-bold text-slate-700 font-nepali">प्रयोगकर्ताहरूको सूची (Users List)</h3>
+            <span className="bg-slate-200 text-slate-700 text-xs font-bold px-2 py-1 rounded-full">{managedUsers.length} Users</span>
+        </div>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                    <tr>
+                        <th className="px-8 py-4">कर्मचारी</th>
+                        <th className="px-8 py-4">भूमिका</th>
+                        <th className="px-8 py-4">संस्था</th>
+                        <th className="px-8 py-4 text-right">कार्य</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {managedUsers.length === 0 ? (
+                        <tr><td colSpan={4} className="px-8 py-10 text-center text-slate-400 italic">कुनै प्रयोगकर्ता भेटिएन।</td></tr>
+                    ) : (
+                        managedUsers.map((user) => (
+                            <tr key={user.id} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="px-8 py-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-lg">{user.fullName.charAt(0)}</div>
+                                        <div>
+                                            <div className="font-bold text-slate-800">{user.fullName}</div>
+                                            <div className="text-xs text-slate-400">@{user.username} | {user.phoneNumber}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-8 py-4">
+                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black border tracking-wide ${
+                                        user.role === 'ADMIN' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                        user.role === 'APPROVAL' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                        user.role === 'STOREKEEPER' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                        'bg-blue-50 text-blue-700 border-blue-200'
+                                    }`}>
+                                        {user.role}
+                                    </span>
+                                    <div className="text-[10px] text-slate-400 mt-1 font-medium italic">{user.designation}</div>
+                                </td>
+                                <td className="px-8 py-4 text-slate-600 font-medium">{user.organizationName}</td>
+                                <td className="px-8 py-4 text-right">
+                                    <div className="flex justify-end gap-2">
+                                        <button onClick={() => handleEditClick(user)} className="text-primary-500 p-2 hover:bg-primary-50 rounded-lg transition-all" title="Edit"><Pencil size={18} /></button>
+                                        <button onClick={() => onDeleteUser(user.id)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg transition-all" title="Delete"><Trash2 size={18} /></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))
+                    )}
+                </tbody>
+            </table>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Save, RotateCcw, Syringe, Calendar, FileDigit, User, Phone, MapPin, CalendarRange, Clock, CheckCircle2, Search, X, AlertTriangle, Trash2, Info } from 'lucide-react';
+import { Save, RotateCcw, Syringe, Calendar, FileDigit, User, Phone, MapPin, CalendarRange, Clock, CheckCircle2, Search, X, AlertTriangle, Trash2, Info, Activity, Filter, List, Globe, RefreshCw } from 'lucide-react';
 import { Input } from './Input';
 import { Select } from './Select';
 import { NepaliDatePicker } from './NepaliDatePicker';
@@ -46,22 +46,30 @@ const animalTypeOptions: Option[] = [
 ];
 
 const whoCategoryOptions: Option[] = [
-    { id: 'cat1', value: 'Category I', label: 'Category I (No skin break, licking on intact skin)' },
-    { id: 'cat2', value: 'Category II', label: 'Category II (Minor scratches, nibbling without bleeding)' },
-    { id: 'cat3', value: 'Category III', label: 'Category III (Transdermal bites, scratches, saliva on broken skin)' },
+    { id: 'cat1', value: 'Category I', label: 'Category I (No skin break)' },
+    { id: 'cat2', value: 'Category II', label: 'Category II (Minor scratches)' },
+    { id: 'cat3', value: 'Category III', label: 'Category III (Transdermal bites)' },
+];
+
+const regimenOptions: Option[] = [
+    { id: 'id', value: 'Intradermal', label: 'छाला भित्र (Intradermal - 0, 3, 7)' },
+    { id: 'im', value: 'Intramuscular', label: 'मासु भित्र (Intramuscular - 0, 3, 7, 14, 28)' },
 ];
 
 export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({ 
   currentFiscalYear, 
-  patients, 
+  patients = [], 
   onAddPatient, 
   onUpdatePatient,
   onDeletePatient,
   currentUser
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'today'>('all');
+  const [showAllYears, setShowAllYears] = useState(true); // Default to true to avoid "hidden" records
   const [modalDateBs, setModalDateBs] = useState('');
-  const [doseUpdateError, setDoseUpdateError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const [selectedDoseInfo, setSelectedDoseInfo] = useState<{
       patient: RabiesPatient;
@@ -70,17 +78,20 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
   } | null>(null);
 
   const canDelete = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
-  const getTodayDateAd = () => new Date().toISOString().split('T')[0];
 
   const generateRegNo = () => {
     const fyClean = currentFiscalYear.replace('/', '');
-    const maxNum = patients
-      .filter(p => p.fiscalYear === currentFiscalYear && p.regNo.startsWith(`R-${fyClean}-`))
+    const currentFYPatients = (patients || []).filter(p => p.fiscalYear === currentFiscalYear && p.regNo?.startsWith(`R-${fyClean}-`));
+    
+    if (currentFYPatients.length === 0) return `R-${fyClean}-001`;
+
+    const maxNum = currentFYPatients
       .map(p => {
-          const parts = p.regNo.split('-');
+          const parts = (p.regNo || '').split('-');
           return parts.length > 2 ? parseInt(parts[2]) : 0;
       })
       .reduce((max, num) => Math.max(max, num), 0);
+      
     return `R-${fyClean}-${String(maxNum + 1).padStart(3, '0')}`;
   };
 
@@ -97,7 +108,7 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
     address: '',
     phone: '',
     animalType: '',
-    exposureCategory: '', // WHO Category
+    exposureCategory: '',
     bodyPart: '',
     exposureDateBs: '',
     regimen: 'Intradermal',
@@ -108,16 +119,43 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
     const today = new NepaliDate();
     const todayBs = today.format('YYYY-MM-DD');
     const month = String(today.getMonth() + 1).padStart(2, '0');
+    const todayAd = new Date().toISOString().split('T')[0];
     
     setFormData(prev => ({
       ...prev,
+      fiscalYear: currentFiscalYear,
       regNo: generateRegNo(),
       regDateBs: todayBs,
       regMonth: month,
-      regDateAd: new Date().toISOString().split('T')[0],
-      exposureDateBs: todayBs
+      regDateAd: todayAd,
+      exposureDateBs: todayBs,
+      regimen: 'Intradermal'
     }));
-  }, [currentFiscalYear, patients.length]);
+  }, [currentFiscalYear]);
+
+  useEffect(() => {
+    if (!formData.name && !formData.phone) {
+        setFormData(prev => ({ ...prev, regNo: generateRegNo() }));
+    }
+  }, [patients.length]);
+
+  const calculateSchedule = (startDateAd: string, regimen: string): VaccinationDose[] => {
+      if (!startDateAd || isNaN(new Date(startDateAd).getTime())) return [];
+      const start = new Date(startDateAd);
+      const schedule: VaccinationDose[] = [];
+      const days = regimen === 'Intradermal' ? [0, 3, 7] : [0, 3, 7, 14, 28];
+      
+      days.forEach(dayOffset => {
+          const doseDate = new Date(start);
+          doseDate.setDate(start.getDate() + dayOffset);
+          schedule.push({
+              day: dayOffset,
+              date: doseDate.toISOString().split('T')[0],
+              status: 'Pending'
+          });
+      });
+      return schedule;
+  };
 
   const handleRegDateBsChange = (val: string) => {
     let month = formData.regMonth;
@@ -135,49 +173,12 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
             console.error("Date conversion error", e);
         }
     }
-    setFormData(prev => {
-        const updated = {
-            ...prev,
-            regDateBs: val,
-            regMonth: month,
-            regDateAd: adDateStr
-        };
-        updated.schedule = calculateSchedule(adDateStr, prev.regimen);
-        return updated;
-    });
-  };
-
-  const calculateSchedule = (startDateAd: string, regimen: string): VaccinationDose[] => {
-      if (!startDateAd) return [];
-      const start = new Date(startDateAd);
-      const schedule: VaccinationDose[] = [];
-      const days = regimen === 'Intradermal' ? [0, 3, 7] : [0, 3, 7, 14, 28];
-      days.forEach(dayOffset => {
-          const doseDate = new Date(start);
-          doseDate.setDate(start.getDate() + dayOffset);
-          schedule.push({
-              day: dayOffset,
-              date: doseDate.toISOString().split('T')[0],
-              status: 'Pending'
-          });
-      });
-      return schedule;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!formData.name || !formData.regDateBs || !formData.exposureCategory) {
-          alert("कृपया आवश्यक विवरणहरू भर्नुहोस् (नाम, मिति र WHO Category अनिवार्य छन्)");
-          return;
-      }
-      const newPatient = {
-          ...formData,
-          id: Date.now().toString(),
-          schedule: calculateSchedule(formData.regDateAd, formData.regimen)
-      };
-      onAddPatient(newPatient);
-      handleReset();
-      alert('बिरामी सफलतापूर्वक दर्ता भयो');
+    setFormData(prev => ({
+        ...prev,
+        regDateBs: val,
+        regMonth: month,
+        regDateAd: adDateStr
+    }));
   };
 
   const handleReset = () => {
@@ -195,23 +196,43 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
         regimen: 'Intradermal',
         schedule: []
     });
+    setErrorMsg(null);
   };
 
-  const handleDeleteClick = (pId: string, pName: string) => {
-      if (!pId) return;
-      if (window.confirm(`के तपाईं निश्चित हुनुहुन्छ कि तपाईं "${pName}" को विवरण हटाउन चाहनुहुन्छ? यो कार्य पूर्ववत गर्न सकिँदैन।`)) {
-          if (onDeletePatient) onDeletePatient(pId);
+  const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setErrorMsg(null);
+
+      if (!formData.name.trim()) { setErrorMsg("बिरामीको नाम अनिवार्य छ।"); return; }
+      if (!formData.regDateBs) { setErrorMsg("दर्ता मिति अनिवार्य छ।"); return; }
+      if (!formData.exposureCategory) { setErrorMsg("WHO Category अनिवार्य छ।"); return; }
+      if (!formData.animalType) { setErrorMsg("टोक्ने जनावरको प्रकार अनिवार्य छ।"); return; }
+      if (!formData.sex) { setErrorMsg("बिरामीको लिङ्ग छान्नुहोस्।"); return; }
+
+      setIsProcessing(true);
+      try {
+          const finalSchedule = calculateSchedule(formData.regDateAd, formData.regimen);
+          const newPatient: RabiesPatient = {
+              ...formData,
+              id: Date.now().toString(),
+              schedule: finalSchedule
+          };
+
+          await onAddPatient(newPatient);
+          handleReset();
+          alert('बिरामी सफलतापूर्वक दर्ता भयो (Patient Registered Successfully)');
+      } catch (err) {
+          setErrorMsg("दर्ता गर्दा समस्या आयो। कृपया पुनः प्रयास गर्नुहोस्।");
+      } finally {
+          setIsProcessing(false);
       }
   };
 
-  const confirmDoseUpdate = () => {
+  const confirmDoseUpdate = async () => {
       if (!selectedDoseInfo) return;
-      setDoseUpdateError(null);
-      if (!modalDateBs) {
-          setDoseUpdateError("कृपया खोप लगाएको मिति छान्नुहोस्");
-          return;
-      }
-      const { patient, doseIndex, dose } = selectedDoseInfo;
+      if (!modalDateBs) { alert("कृपया खोप लगाएको मिति छान्नुहोस्"); return; }
+
+      const { patient, doseIndex } = selectedDoseInfo;
       let givenDateAd = '';
       try {
           const parts = modalDateBs.split(/[-/]/);
@@ -219,160 +240,238 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           const nd = new NepaliDate(y, m - 1, d);
           givenDateAd = nd.toJsDate().toISOString().split('T')[0];
       } catch (e) {
-          setDoseUpdateError("मिति ढाँचा मिलेन");
+          alert("मिति ढाँचा मिलेन");
           return;
       }
-      if (dose.day !== 0 && givenDateAd < dose.date) {
-          setDoseUpdateError("तपाईंले छान्नुभएको मिति खोप तालिका भन्दा अगाडि छ।");
-          return;
-      }
-      const updatedSchedule = [...patient.schedule];
+
+      const updatedSchedule = [...(patient.schedule || [])];
       updatedSchedule[doseIndex] = {
           ...updatedSchedule[doseIndex],
           status: 'Given',
           givenDate: givenDateAd
       };
-      onUpdatePatient({ ...patient, schedule: updatedSchedule });
+
+      await onUpdatePatient({ ...patient, schedule: updatedSchedule });
       setSelectedDoseInfo(null);
   };
 
-  const handleDoseClick = (p: RabiesPatient, idx: number, dose: VaccinationDose) => {
-      setSelectedDoseInfo({ patient: p, doseIndex: idx, dose });
-      setDoseUpdateError(null);
-      try {
-          const scheduledDate = new Date(dose.date);
-          const nd = new NepaliDate(scheduledDate);
-          setModalDateBs(nd.format('YYYY-MM-DD'));
-      } catch (e) {
-          setModalDateBs('');
-      }
-  };
+  const filteredPatients = useMemo(() => {
+      const todayAd = new Date().toISOString().split('T')[0];
+      // Ensure patients is an array
+      const patientList = Array.isArray(patients) ? patients : [];
 
-  const filteredPatients = patients.filter(p => 
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      p.regNo.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      let result = patientList.filter(p => {
+          if (!p) return false;
 
-  const todayAd = getTodayDateAd();
+          // 1. Fiscal Year Check (unless showAllYears is true)
+          const patientFY = String(p.fiscalYear || '').trim();
+          const activeFY = String(currentFiscalYear || '').trim();
+          const matchesFY = showAllYears || (patientFY === activeFY);
+          
+          if (!matchesFY) return false;
+
+          // 2. Search Term Check
+          const patientName = String(p.name || '').toLowerCase();
+          const patientReg = String(p.regNo || '').toLowerCase();
+          const patientPhone = String(p.phone || '').toLowerCase();
+          const search = searchTerm.toLowerCase().trim();
+
+          const matchesSearch = !search || 
+                                patientName.includes(search) || 
+                                patientReg.includes(search) ||
+                                patientPhone.includes(search);
+          
+          if (!matchesSearch) return false;
+
+          // 3. Status Filter (Today's Dose Due)
+          if (filterType === 'today') {
+              const needsDoseToday = (p.schedule || []).some(dose => dose.date === todayAd && dose.status === 'Pending');
+              return needsDoseToday;
+          }
+          
+          return true;
+      });
+
+      return result.sort((a, b) => b.id.localeCompare(a.id));
+  }, [patients, searchTerm, filterType, currentFiscalYear, showAllYears]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
       <div className="flex items-center justify-between border-b border-slate-200 pb-4">
         <div className="flex items-center gap-3">
-            <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
+            <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-100">
                 <Syringe size={24} />
             </div>
             <div>
-                <h2 className="text-xl font-bold text-slate-800 font-nepali">रेबिज खोप दर्ता (Rabies Registration)</h2>
+                <h2 className="text-xl font-bold text-slate-800 font-nepali">रेबिज़ खोप क्लिनिक (Rabies Vaccine Clinic)</h2>
                 <p className="text-sm text-slate-500 font-nepali">नयाँ बिरामी दर्ता र खोप तालिका व्यवस्थापन</p>
             </div>
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <form onSubmit={handleSubmit} className="grid md:grid-cols-3 gap-6">
-              <div className="md:col-span-3 bg-indigo-50 p-4 rounded-lg border border-indigo-100 flex items-center gap-4">
-                  <div className="bg-white p-2 rounded border border-indigo-200">
-                      <FileDigit size={20} className="text-indigo-600" />
+      {errorMsg && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl flex items-center gap-3 animate-pulse">
+              <AlertTriangle className="text-red-500" size={20} />
+              <p className="text-sm text-red-800 font-bold font-nepali">{errorMsg}</p>
+          </div>
+      )}
+
+      {/* Registration Form */}
+      <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-xl relative overflow-hidden no-print">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full -mr-16 -mt-16 opacity-50"></div>
+          
+          <form onSubmit={handleSubmit} className="relative z-10 space-y-8">
+              <div className="grid md:grid-cols-4 gap-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+                  <div className="md:col-span-1">
+                      <label className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-1">दर्ता नम्बर (Reg No)</label>
+                      <div className="bg-white border border-indigo-200 rounded-lg px-3 py-2 font-mono text-lg font-black text-indigo-700 shadow-inner">
+                        {formData.regNo}
+                      </div>
                   </div>
-                  <div>
-                      <label className="text-xs font-bold text-indigo-500 uppercase tracking-wide">दर्ता नम्बर (Reg No)</label>
-                      <input value={formData.regNo} readOnly className="bg-transparent font-mono text-lg font-bold text-slate-800 outline-none w-full" />
+                  <NepaliDatePicker label="दर्ता मिति (BS) *" value={formData.regDateBs} onChange={handleRegDateBsChange} required />
+                  <Select label="दर्ता महिना" value={formData.regMonth} onChange={e => setFormData({...formData, regMonth: e.target.value})} options={nepaliMonthOptions} icon={<CalendarRange size={16} />} />
+                  <Input label="अंग्रेजी मिति (AD)" value={formData.regDateAd} readOnly className="bg-slate-100 text-slate-400 font-mono" icon={<Calendar size={16} />} />
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-6">
+                  <Input label="बिरामीको नाम *" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required placeholder="Full Name" icon={<User size={18} />} />
+                  <div className="grid grid-cols-2 gap-4">
+                      <Input label="उमेर *" value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} required placeholder="Yr" type="number" />
+                      <Select label="लिङ्ग *" value={formData.sex} onChange={e => setFormData({...formData, sex: e.target.value})} options={[{id: 'm', value: 'Male', label: 'पुरुष'}, {id: 'f', value: 'Female', label: 'महिला'}, {id: 'o', value: 'Other', label: 'अन्य'}]} required />
                   </div>
-                  <div className="ml-auto text-right">
-                      <label className="text-xs font-bold text-indigo-500 uppercase tracking-wide">आर्थिक वर्ष</label>
-                      <div className="font-nepali font-medium text-slate-700">{currentFiscalYear}</div>
+                  <Input label="सम्पर्क नं" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="98XXXXXXXX" icon={<Phone size={18} />} />
+                  
+                  <Input label="ठेगाना *" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} required placeholder="Municipality-Ward" icon={<MapPin size={18} />} />
+                  <Select label="टोक्ने जनावर *" value={formData.animalType} onChange={e => setFormData({...formData, animalType: e.target.value})} options={animalTypeOptions} required />
+                  <Select label="WHO Category *" value={formData.exposureCategory} onChange={e => setFormData({...formData, exposureCategory: e.target.value})} options={whoCategoryOptions} required icon={<AlertTriangle size={18} />} />
+                  
+                  <div className="md:col-span-2">
+                    <Select label="खोप लगाउने तरिका (Regimen) *" value={formData.regimen} onChange={e => setFormData({...formData, regimen: e.target.value as any})} options={regimenOptions} required icon={<Activity size={18} />} />
                   </div>
+                  <Input label="टोकेको ठाउँ (Body Part)" value={formData.bodyPart} onChange={e => setFormData({...formData, bodyPart: e.target.value})} placeholder="e.g. Leg, Hand" />
               </div>
 
-              <div className="md:col-span-1">
-                 <NepaliDatePicker label="दर्ता मिति (BS)" value={formData.regDateBs} onChange={handleRegDateBsChange} required />
-              </div>
-
-              <Select label="दर्ता महिना" value={formData.regMonth} onChange={e => setFormData({...formData, regMonth: e.target.value})} options={nepaliMonthOptions} icon={<CalendarRange size={16} />} />
-              <Input label="अंग्रेजी मिति (AD)" value={formData.regDateAd} readOnly className="bg-slate-50 text-slate-500" icon={<Calendar size={16} />} />
-
-              <Input label="बिरामीको नाम" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required placeholder="Full Name" icon={<User size={16} />} />
-
-              <div className="grid grid-cols-2 gap-4">
-                  <Input label="उमेर" value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} required placeholder="Yr" type="number" />
-                  <Select label="लिङ्ग" value={formData.sex} onChange={e => setFormData({...formData, sex: e.target.value})} options={[{id: 'm', value: 'Male', label: 'पुरुष'}, {id: 'f', value: 'Female', label: 'महिला'}, {id: 'o', value: 'Other', label: 'अन्य'}]} required />
-              </div>
-
-              <Input label="सम्पर्क नं" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} required placeholder="98XXXXXXXX" icon={<Phone size={16} />} />
-
-              <div className="md:col-span-1">
-                  <Input label="ठेगाना" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} required placeholder="Municipality-Ward" icon={<MapPin size={16} />} />
-              </div>
-
-              <Select label="टोक्ने जनावर" value={formData.animalType} onChange={e => setFormData({...formData, animalType: e.target.value})} options={animalTypeOptions} required />
-              <Select label="WHO Category (Exposure)" value={formData.exposureCategory} onChange={e => setFormData({...formData, exposureCategory: e.target.value})} options={whoCategoryOptions} required icon={<AlertTriangle size={16} />} />
-
-              <div className="md:col-span-3 pt-4 border-t border-slate-100 flex justify-end gap-3">
-                  <button type="button" className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg flex items-center gap-2" onClick={handleReset}><RotateCcw size={18} /> रिसेट</button>
-                  <button type="submit" className="px-6 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg shadow-sm flex items-center gap-2 font-medium font-nepali"><Save size={18} /> दर्ता गर्नुहोस्</button>
+              <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">
+                  <button type="button" disabled={isProcessing} className="px-6 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl flex items-center gap-2 font-bold transition-all" onClick={handleReset}>
+                    <RotateCcw size={20} /> रिसेट
+                  </button>
+                  <button type="submit" disabled={isProcessing} className="px-10 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-200 flex items-center gap-2 font-bold font-nepali transition-all active:scale-95 disabled:opacity-50">
+                    {isProcessing ? 'प्रक्रियामा छ...' : <><Save size={20} /> दर्ता गर्नुहोस्</>}
+                  </button>
               </div>
           </form>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-              <div className="flex items-center gap-3">
-                <h3 className="font-semibold text-slate-700 font-nepali">बिरामी फलोअप सूची (Follow-up List)</h3>
-                <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">{filteredPatients.length} Patients</span>
+      {/* Patients List Table */}
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-lg">
+          <div className="px-8 py-5 border-b border-slate-100 bg-slate-50/50 flex flex-col lg:flex-row justify-between items-center gap-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="flex flex-col">
+                  <h3 className="font-bold text-slate-700 font-nepali text-lg">बिरामी खोप अभिलेख (Clinic Records)</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] bg-indigo-100 text-indigo-700 w-fit px-3 py-1 rounded-full font-black uppercase tracking-wider">{filteredPatients.length} Records</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Total in Database: {patients.length}</span>
+                  </div>
+                </div>
+                
+                {/* Status Toggles */}
+                <div className="flex bg-slate-200/50 p-1 rounded-xl no-print">
+                   <button onClick={() => setFilterType('all')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filterType === 'all' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-white/50'}`}>
+                      <List size={14} /> सबै (All)
+                   </button>
+                   <button onClick={() => setFilterType('today')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filterType === 'today' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/50'}`}>
+                      <Clock size={14} /> आज (Dose Due)
+                   </button>
+                </div>
+
+                <button 
+                  onClick={() => setShowAllYears(!showAllYears)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all no-print ${showAllYears ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                  title="पुरानो आर्थिक वर्षको डाटा हेर्न क्लिक गर्नुहोस्"
+                >
+                  <Globe size={14} /> {showAllYears ? 'सबै वर्षको सूची (All Years)' : 'यो वर्ष मात्र (Current FY)'}
+                </button>
               </div>
-              <div className="relative w-full sm:w-64">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input type="text" placeholder="नाम वा दर्ता नं खोज्नुहोस्..." className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              
+              <div className="relative w-full lg:w-80 no-print">
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="text" 
+                    placeholder="नाम, फोन वा दर्ता नं खोज्नुहोस्..." 
+                    className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm" 
+                    value={searchTerm} 
+                    onChange={e => setSearchTerm(e.target.value)} 
+                  />
               </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left whitespace-nowrap">
-              <thead className="bg-slate-50 text-slate-600 font-medium">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                   <tr>
-                      <th className="px-6 py-3">दर्ता नं</th>
-                      <th className="px-6 py-3">बिरामी / जनावर / Category</th>
-                      <th className="px-6 py-3">खोप तालिका (Follow-up)</th>
-                      {canDelete && <th className="px-6 py-3 text-right">कार्य (Action)</th>}
+                      <th className="px-8 py-4">दर्ता नं / वर्ष</th>
+                      <th className="px-8 py-4">बिरामी विवरण</th>
+                      <th className="px-8 py-4">जनावर / Category</th>
+                      <th className="px-8 py-4">खोप तालिका (Status)</th>
+                      {canDelete && <th className="px-8 py-4 text-right no-print">कार्य</th>}
                   </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                   {filteredPatients.length === 0 ? (
-                      <tr><td colSpan={canDelete ? 4 : 3} className="px-6 py-8 text-center text-slate-400 italic font-nepali">डाटा फेला परेन</td></tr>
+                      <tr>
+                        <td colSpan={canDelete ? 5 : 4} className="px-8 py-20 text-center text-slate-400 italic font-nepali text-base">
+                            <div className="flex flex-col items-center gap-3">
+                                <Search size={48} className="text-slate-200" />
+                                <div>
+                                    <p className="font-bold text-slate-500">कुनै पनि बिरामी फेला परेन।</p>
+                                    <p className="text-xs mt-1">कृपया खोजिएको शब्द वा "सबै वर्ष" फिल्टर जाँच गर्नुहोस्।</p>
+                                </div>
+                                <button onClick={() => {setSearchTerm(''); setShowAllYears(true); setFilterType('all');}} className="mt-2 text-indigo-600 font-bold text-sm hover:underline flex items-center gap-2">
+                                    <RefreshCw size={14} /> फिल्टर रिसेट गर्नुहोस्
+                                </button>
+                            </div>
+                        </td>
+                      </tr>
                   ) : (
                       filteredPatients.map(p => (
-                          <tr key={p.id} className="hover:bg-slate-50">
-                              <td className="px-6 py-4 font-mono font-medium text-indigo-600">{p.regNo}</td>
-                              <td className="px-6 py-4">
-                                  <div className="font-medium text-slate-800">{p.name}</div>
-                                  <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
-                                    <span className="bg-slate-100 px-1 rounded">{p.animalType}</span>
-                                    <span className={`px-1 rounded font-bold border ${
-                                        p.exposureCategory === 'Category III' ? 'bg-red-50 text-red-700 border-red-200' :
-                                        p.exposureCategory === 'Category II' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                        'bg-blue-50 text-blue-700 border-blue-200'
-                                    }`}>{p.exposureCategory}</span>
-                                  </div>
+                          <tr key={p.id} className="hover:bg-slate-50/80 transition-colors group">
+                              <td className="px-8 py-4">
+                                <div className="font-mono font-bold text-indigo-600">#{p.regNo || 'N/A'}</div>
+                                <div className="text-[9px] text-slate-400 font-nepali font-bold mt-0.5">{p.fiscalYear}</div>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="px-8 py-4">
+                                  <div className="font-bold text-slate-800">{p.name || 'Unknown'}</div>
+                                  <div className="text-[10px] text-slate-400 mt-0.5">{p.age || '-'} Yrs | {p.sex || '-'} | {p.phone || 'No Phone'}</div>
+                              </td>
+                              <td className="px-8 py-4">
+                                  <div className="text-slate-700 font-medium">{p.animalType}</div>
+                                  <div className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black border uppercase mt-1 ${
+                                      p.exposureCategory === 'Category III' ? 'bg-red-50 text-red-700 border-red-200' :
+                                      p.exposureCategory === 'Category II' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                      'bg-blue-50 text-blue-700 border-blue-200'
+                                  }`}>{p.exposureCategory}</div>
+                              </td>
+                              <td className="px-8 py-4">
                                   <div className="flex items-center gap-2">
-                                      {p.schedule.map((dose, idx) => (
-                                          <button key={idx} type="button" onClick={() => handleDoseClick(p, idx, dose)} className={`flex flex-col items-center justify-center w-12 h-14 rounded-lg border transition-all ${
-                                                  dose.status === 'Given' ? 'bg-green-50 border-green-200 text-green-700' :
-                                                  dose.date === todayAd ? 'bg-orange-50 border-orange-200 text-orange-700 animate-pulse ring-2 ring-orange-100' :
-                                                  'bg-slate-50 border-slate-200 text-slate-400'
-                                              }`}
-                                          >
-                                              <span className="text-[10px] font-bold uppercase">D{dose.day}</span>
-                                              {dose.status === 'Given' ? <CheckCircle2 size={16} /> : <Clock size={16} />}
-                                              <span className="text-[9px] mt-0.5">{dose.date.split('-').slice(1).join('-')}</span>
-                                          </button>
-                                      ))}
+                                      {(p.schedule || []).map((dose, idx) => {
+                                          const isToday = dose.date === new Date().toISOString().split('T')[0];
+                                          return (
+                                            <button key={idx} type="button" onClick={() => setSelectedDoseInfo({ patient: p, doseIndex: idx, dose })} className={`flex flex-col items-center justify-center w-12 h-14 rounded-xl border transition-all ${
+                                                    dose.status === 'Given' ? 'bg-green-50 border-green-200 text-green-700 shadow-inner' :
+                                                    isToday ? 'bg-orange-50 border-orange-300 text-orange-700 animate-pulse ring-4 ring-orange-50' :
+                                                    'bg-slate-50 border-slate-200 text-slate-400'
+                                                }`}
+                                            >
+                                                <span className="text-[9px] font-black uppercase">D{dose.day}</span>
+                                                {dose.status === 'Given' ? <CheckCircle2 size={16} /> : <Clock size={16} />}
+                                                <span className="text-[8px] mt-0.5 font-bold">{(dose.date || '').split('-').slice(1).join('/')}</span>
+                                            </button>
+                                          );
+                                      })}
                                   </div>
                               </td>
                               {canDelete && (
-                                  <td className="px-6 py-4 text-right">
-                                      <button onClick={() => handleDeleteClick(p.id, p.name)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-full transition-all" title="बिरामी विवरण हटाउनुहोस्">
+                                  <td className="px-8 py-4 text-right no-print">
+                                      <button onClick={() => onDeletePatient && onDeletePatient(p.id)} className="text-slate-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-full transition-all">
                                           <Trash2 size={18} />
                                       </button>
                                   </td>
@@ -385,46 +484,48 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           </div>
       </div>
 
+      {/* Dose Update Modal */}
       {selectedDoseInfo && (
-          <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 sm:pt-24">
-              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedDoseInfo(null)}></div>
-              <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-                  <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-indigo-50/50">
-                      <div className="flex items-center gap-2">
-                          <Syringe size={20} className="text-indigo-600"/>
-                          <h3 className="font-bold text-slate-800 font-nepali text-sm">खोप विवरण (Update Vaccine Status)</h3>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setSelectedDoseInfo(null)}></div>
+              <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
+                  <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
+                      <div className="flex items-center gap-3">
+                          <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Syringe size={20}/></div>
+                          <h3 className="font-bold text-slate-800 font-nepali">खोप विवरण अपडेट</h3>
                       </div>
-                      <button type="button" onClick={() => setSelectedDoseInfo(null)} className="p-2 hover:bg-white/50 rounded-full transition-colors"><X size={20} className="text-slate-400"/></button>
+                      <button onClick={() => setSelectedDoseInfo(null)} className="p-2 hover:bg-white rounded-full transition-colors text-slate-400"><X size={20}/></button>
                   </div>
-                  <div className="p-6 space-y-4">
+                  <div className="p-8 space-y-6">
                       <div className="text-center">
-                          <h4 className="text-lg font-bold text-slate-800">{selectedDoseInfo.patient.name}</h4>
-                          <div className="flex justify-center gap-2 mt-2">
-                            <span className="text-[10px] font-bold bg-slate-100 px-2 py-1 rounded-full uppercase">{selectedDoseInfo.patient.exposureCategory}</span>
-                            <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full">{selectedDoseInfo.dose.date}</span>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Patient Name</p>
+                          <h4 className="text-xl font-black text-slate-800">{selectedDoseInfo.patient.name}</h4>
+                          <div className="flex justify-center gap-2 mt-3">
+                            <span className="text-[10px] font-bold bg-slate-100 px-3 py-1 rounded-full text-slate-600 uppercase">Day {selectedDoseInfo.dose.day}</span>
+                            <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full">{selectedDoseInfo.dose.date}</span>
                           </div>
                       </div>
+
                       {selectedDoseInfo.dose.status === 'Given' ? (
-                          <div className="bg-green-50 border border-green-100 p-3 rounded-lg text-center font-nepali text-green-700">
-                              <CheckCircle2 size={18} className="mx-auto mb-1" /> खोप लगाइसकियो
-                              <p className="text-xs mt-1">लगाएको मिति: {selectedDoseInfo.dose.givenDate}</p>
+                          <div className="bg-green-50 border border-green-100 p-4 rounded-xl text-center font-nepali text-green-700 shadow-inner">
+                              <CheckCircle2 size={24} className="mx-auto mb-2" /> 
+                              <p className="font-bold text-lg">खोप लगाइसकेको छ</p>
+                              <p className="text-xs mt-1 opacity-80">लगाएको मिति: {selectedDoseInfo.dose.givenDate}</p>
                           </div>
                       ) : (
-                          <div className="space-y-3">
-                              <NepaliDatePicker label="खोप लगाएको मिति (Given Date - BS)" value={modalDateBs} onChange={setModalDateBs} />
-                              {doseUpdateError && (
-                                <div className="flex items-center gap-2 text-[10px] text-red-500 font-medium bg-red-50 p-2 rounded border border-red-100">
-                                  <AlertTriangle size={14} />
-                                  <span>{doseUpdateError}</span>
-                                </div>
-                              )}
+                          <div className="space-y-4">
+                              <NepaliDatePicker label="खोप लगाएको मिति (BS) *" value={modalDateBs} onChange={setModalDateBs} />
+                              <div className="bg-blue-50 p-3 rounded-lg flex items-start gap-2 border border-blue-100">
+                                  <Info size={14} className="text-blue-600 mt-0.5 shrink-0" />
+                                  <p className="text-[10px] text-blue-700 font-medium">कृपया खोप लगाएको मिति यकिन गरि सुरक्षित गर्नुहोस्।</p>
+                              </div>
                           </div>
                       )}
                   </div>
-                  <div className="p-4 border-t border-slate-100 flex gap-3 bg-slate-50">
-                      <button type="button" onClick={() => setSelectedDoseInfo(null)} className="flex-1 py-2 text-slate-600 font-medium font-nepali hover:bg-slate-200 rounded-lg transition-colors text-sm">रद्द (Cancel)</button>
+                  <div className="p-4 bg-slate-50 border-t flex gap-3">
+                      <button onClick={() => setSelectedDoseInfo(null)} className="flex-1 py-2.5 text-slate-600 font-bold hover:bg-slate-200 rounded-xl transition-all text-sm">रद्द</button>
                       {selectedDoseInfo.dose.status !== 'Given' && (
-                          <button type="button" onClick={confirmDoseUpdate} className="flex-1 py-2 bg-green-600 text-white rounded-lg font-medium shadow-sm font-nepali hover:bg-green-700 transition-colors text-sm">सुरक्षित (Confirm)</button>
+                          <button onClick={confirmDoseUpdate} className="flex-1 py-2.5 bg-green-600 text-white rounded-xl font-bold shadow-lg shadow-green-200 hover:bg-green-700 transition-all text-sm">सुरक्षित गर्नुहोस्</button>
                       )}
                   </div>
               </div>
