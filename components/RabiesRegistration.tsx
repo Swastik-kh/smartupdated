@@ -77,7 +77,8 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
       dose: VaccinationDose;
   } | null>(null);
 
-  const canDelete = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
+  // Updated canDelete to include APPROVAL role
+  const canDelete = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN' || currentUser.role === 'APPROVAL';
 
   const generateRegNo = () => {
     const fyClean = currentFiscalYear.replace('/', '');
@@ -232,7 +233,7 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
       if (!selectedDoseInfo) return;
       if (!modalDateBs) { alert("कृपया खोप लगाएको मिति छान्नुहोस्"); return; }
 
-      const { patient, doseIndex } = selectedDoseInfo;
+      const { patient, doseIndex, dose } = selectedDoseInfo;
       let givenDateAd = '';
       try {
           const parts = modalDateBs.split(/[-/]/);
@@ -241,6 +242,12 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           givenDateAd = nd.toJsDate().toISOString().split('T')[0];
       } catch (e) {
           alert("मिति ढाँचा मिलेन");
+          return;
+      }
+
+      // STRICT VALIDATION: Given date cannot be before scheduled date
+      if (givenDateAd < dose.date) {
+          alert(`त्रुटि: खोप लगाएको मिति निर्धारित मिति (${dose.date}) भन्दा अगाडि हुन सक्दैन।`);
           return;
       }
 
@@ -253,6 +260,20 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
 
       await onUpdatePatient({ ...patient, schedule: updatedSchedule });
       setSelectedDoseInfo(null);
+      setModalDateBs('');
+  };
+
+  // Safe delete handler with confirmation
+  const handleDeleteClick = (patient: RabiesPatient) => {
+      if (!onDeletePatient) return;
+      
+      const confirmDelete = window.confirm(
+          `के तपाईं निश्चित हुनुहुन्छ? बिरामी "${patient.name}" को सम्पूर्ण विवरण र खोप तालिका डाटाबेसबाट सधैंका लागि मेटिनेछ।`
+      );
+      
+      if (confirmDelete) {
+          onDeletePatient(patient.id);
+      }
   };
 
   const filteredPatients = useMemo(() => {
@@ -294,6 +315,18 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
 
       return result.sort((a, b) => b.id.localeCompare(a.id));
   }, [patients, searchTerm, filterType, currentFiscalYear, showAllYears]);
+
+  // Convert AD Scheduled Date to BS for Min Date setting in picker
+  const scheduledDateBs = useMemo(() => {
+    if (!selectedDoseInfo) return '';
+    try {
+        const adDate = new Date(selectedDoseInfo.dose.date);
+        const nd = new NepaliDate(adDate);
+        return nd.format('YYYY-MM-DD');
+    } catch (e) {
+        return '';
+    }
+  }, [selectedDoseInfo]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
@@ -406,7 +439,7 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+              <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
                   <tr>
                       <th className="px-8 py-4">दर्ता नं / वर्ष</th>
                       <th className="px-8 py-4">बिरामी विवरण</th>
@@ -471,7 +504,11 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
                               </td>
                               {canDelete && (
                                   <td className="px-8 py-4 text-right no-print">
-                                      <button onClick={() => onDeletePatient && onDeletePatient(p.id)} className="text-slate-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-full transition-all">
+                                      <button 
+                                          onClick={() => handleDeleteClick(p)} 
+                                          className="text-slate-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-full transition-all"
+                                          title="बिरामी हटाउनुहोस्"
+                                      >
                                           <Trash2 size={18} />
                                       </button>
                                   </td>
@@ -514,10 +551,16 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
                           </div>
                       ) : (
                           <div className="space-y-4">
-                              <NepaliDatePicker label="खोप लगाएको मिति (BS) *" value={modalDateBs} onChange={setModalDateBs} />
+                              {/* Set minDate to scheduledDateBs to prevent earlier selection */}
+                              <NepaliDatePicker 
+                                label="खोप लगाएको मिति (BS) *" 
+                                value={modalDateBs} 
+                                onChange={setModalDateBs} 
+                                minDate={scheduledDateBs} 
+                              />
                               <div className="bg-blue-50 p-3 rounded-lg flex items-start gap-2 border border-blue-100">
                                   <Info size={14} className="text-blue-600 mt-0.5 shrink-0" />
-                                  <p className="text-[10px] text-blue-700 font-medium">कृपया खोप लगाएको मिति यकिन गरि सुरक्षित गर्नुहोस्।</p>
+                                  <p className="text-[10px] text-blue-700 font-medium">खोप लगाएको मिति निर्धारित मिति ({scheduledDateBs}) भन्दा अगाडि हुन सक्दैन।</p>
                               </div>
                           </div>
                       )}
