@@ -81,7 +81,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
   useEffect(() => {
     if (selectedDoseInfo) {
         try {
-            // Standardize AD date string to JS date without timezone shift
             const parts = selectedDoseInfo.dose.date.split('-');
             const adDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
             const nd = new NepaliDate(adDate);
@@ -256,7 +255,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           const [y, m, d] = parts.map(Number);
           const nd = new NepaliDate(y, m - 1, d);
           const jsDate = nd.toJsDate();
-          // Precise YYYY-MM-DD construction
           givenDateAd = jsDate.getFullYear() + '-' + 
                         String(jsDate.getMonth() + 1).padStart(2, '0') + '-' + 
                         String(jsDate.getDate()).padStart(2, '0');
@@ -265,9 +263,9 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           return;
       }
 
-      // STRICT VALIDATION: Given date cannot be before scheduled date
-      if (givenDateAd < dose.date) {
-          alert(`त्रुटि: खोप लगाएको मिति निर्धारित मिति (${dose.date}) भन्दा अगाडि हुन सक्दैन। (Date cannot be before schedule)`);
+      // STRICT VALIDATION: Given date cannot be before scheduled date (EXCEPT for Day 0)
+      if (dose.day !== 0 && givenDateAd < dose.date) {
+          alert(`त्रुटि: खोप लगाएको मिति निर्धारित मिति (${dose.date}) भन्दा अगाडि हुन सक्दैन।`);
           return;
       }
 
@@ -461,11 +459,19 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
                           <div className="bg-green-50 border border-green-100 p-4 rounded-xl text-center font-nepali text-green-700"><CheckCircle2 size={24} className="mx-auto mb-2" /><p className="font-bold text-lg">खोप लगाइसकेको छ</p><p className="text-xs mt-1">मिति: {selectedDoseInfo.dose.givenDate}</p></div>
                       ) : (
                           <div className="space-y-4">
-                              <NepaliDatePicker label="खोप लगाएको मिति (BS) *" value={modalDateBs} onChange={setModalDateBs} minDate={scheduledDateBs} />
-                              <div className="bg-blue-50 p-3 rounded-lg flex items-start gap-2 border border-blue-100">
-                                  <Info size={14} className="text-blue-600 mt-0.5" />
-                                  <p className="text-[10px] text-blue-700 font-medium">खोप लगाएको मिति निर्धारित मिति ({scheduledDateBs}) भन्दा अगाडि हुन सक्दैन।</p>
-                              </div>
+                              {/* If D0 (Day 0), allow any date. Otherwise, restrict to scheduled date or later. */}
+                              <NepaliDatePicker 
+                                label="खोप लगाएको मिति (BS) *" 
+                                value={modalDateBs} 
+                                onChange={setModalDateBs} 
+                                minDate={selectedDoseInfo.dose.day === 0 ? undefined : scheduledDateBs} 
+                              />
+                              {selectedDoseInfo.dose.day !== 0 && (
+                                <div className="bg-blue-50 p-3 rounded-lg flex items-start gap-2 border border-blue-100">
+                                    <Info size={14} className="text-blue-600 mt-0.5" />
+                                    <p className="text-[10px] text-blue-700 font-medium">खोप लगाएको मिति निर्धारित मिति ({scheduledDateBs}) भन्दा अगाडि हुन सक्दैन।</p>
+                                </div>
+                              )}
                           </div>
                       )}
                   </div>
