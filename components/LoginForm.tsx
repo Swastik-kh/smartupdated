@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Calendar, User, Lock, LogIn, Eye, EyeOff, Loader2, AlertCircle, Info, Code } from 'lucide-react';
 import { Input } from './Input';
 import { Select } from './Select';
@@ -12,6 +12,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
     username: '',
     password: '',
   });
+
+  // Effect to sync formData when the default fiscal year is loaded from database
+  useEffect(() => {
+    if (initialFiscalYear) {
+        setFormData(prev => ({ ...prev, fiscalYear: initialFiscalYear }));
+    }
+  }, [initialFiscalYear]);
 
   const [errors, setErrors] = useState<Partial<LoginFormData & { form: string }>>({});
   const [isLoading, setIsLoading] = useState(false);

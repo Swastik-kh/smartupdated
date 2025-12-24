@@ -39,6 +39,7 @@ const App: React.FC = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]); 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentFiscalYear, setCurrentFiscalYear] = useState<string>('2081/082');
+  const [appDefaultFiscalYear, setAppDefaultFiscalYear] = useState<string>('2081/082');
   const [generalSettings, setGeneralSettings] = useState<OrganizationSettings>(INITIAL_SETTINGS);
   const [isDbConnected, setIsDbConnected] = useState(false);
   
@@ -60,6 +61,14 @@ const App: React.FC = () => {
   useEffect(() => {
     const connectedRef = ref(db, ".info/connected");
     onValue(connectedRef, (snap) => setIsDbConnected(snap.val() === true));
+
+    // Load Global Default Fiscal Year for Login
+    const globalConfigRef = ref(db, 'appConfig/defaultFiscalYear');
+    onValue(globalConfigRef, (snap) => {
+        if (snap.exists()) {
+            setAppDefaultFiscalYear(snap.val());
+        }
+    });
 
     const adminRef = ref(db, 'users/superadmin');
     get(adminRef).then((snapshot) => {
@@ -145,6 +154,18 @@ const App: React.FC = () => {
   const getOrgRef = (subPath: string) => {
       const safeOrgName = currentUser?.organizationName.trim().replace(/[.#$[\]]/g, "_") || "unknown";
       return ref(db, `orgData/${safeOrgName}/${subPath}`);
+  };
+
+  const handleUpdateGeneralSettings = (s: OrganizationSettings) => {
+      if (!currentUser) return;
+      
+      // Save to Org-specific settings
+      set(getOrgRef('settings'), s);
+      
+      // If SUPER_ADMIN saves, also update the Global App Config for Login page default
+      if (currentUser.role === 'SUPER_ADMIN') {
+          set(ref(db, 'appConfig/defaultFiscalYear'), s.activeFiscalYear);
+      }
   };
 
   const handleSaveReturnEntry = async (entry: ReturnEntry) => {
@@ -511,7 +532,7 @@ const App: React.FC = () => {
           onDeleteUser={(id) => remove(ref(db, `users/${id}`))}
           onChangePassword={(id, pass) => update(ref(db, `users/${id}`), { password: pass })}
           generalSettings={generalSettings}
-          onUpdateGeneralSettings={(s) => set(getOrgRef('settings'), s)}
+          onUpdateGeneralSettings={handleUpdateGeneralSettings}
           magForms={magForms}
           onSaveMagForm={handleSaveMagForm}
           purchaseOrders={purchaseOrders}
@@ -571,7 +592,7 @@ const App: React.FC = () => {
                 <LoginForm 
                     users={allUsers} 
                     onLoginSuccess={handleLoginSuccess} 
-                    initialFiscalYear={'2081/082'} 
+                    initialFiscalYear={appDefaultFiscalYear} 
                 />
               </div>
               <div className="bg-slate-50 p-5 text-center border-t border-slate-100 flex items-center justify-center gap-3">
