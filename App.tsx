@@ -489,8 +489,8 @@ const App: React.FC = () => {
           onClearData={(p) => remove(getOrgRef(p))}
         />
       ) : (
-        <div className="min-h-screen w-full bg-[#f8fafc] flex items-center justify-center p-6 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:20px_20px]">
-          <div className="w-full max-w-[440px] animate-in fade-in zoom-in-95 duration-500">
+        <div className="min-h-screen w-full bg-[#f8fafc] flex items-center justify-center p-6 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:20px_20px] overflow-y-auto">
+          <div className="w-full max-w-[440px] py-10 animate-in fade-in zoom-in-95 duration-500">
             <div className="bg-white rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.08)] overflow-hidden border border-slate-100">
               <div className="bg-primary-600 p-12 text-center text-white relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
