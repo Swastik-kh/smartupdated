@@ -35,10 +35,23 @@ const DEFAULT_ADMIN: User = {
     allowedMenus: ['dashboard', 'inventory', 'settings']
 };
 
+const STORAGE_KEY_USER = 'smart_inventory_active_user';
+const STORAGE_KEY_FY = 'smart_inventory_active_fy';
+
 const App: React.FC = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]); 
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentFiscalYear, setCurrentFiscalYear] = useState<string>('2081/082');
+  
+  // Initialize state from localStorage if available
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_USER);
+    return saved ? JSON.parse(saved) : null;
+  });
+  
+  const [currentFiscalYear, setCurrentFiscalYear] = useState<string>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_FY);
+    return saved || '2081/082';
+  });
+
   const [appDefaultFiscalYear, setAppDefaultFiscalYear] = useState<string>('2081/082');
   const [generalSettings, setGeneralSettings] = useState<OrganizationSettings>(INITIAL_SETTINGS);
   const [isDbConnected, setIsDbConnected] = useState(false);
@@ -152,6 +165,15 @@ const App: React.FC = () => {
   const handleLoginSuccess = (user: User, fiscalYear: string) => {
     setCurrentUser(user);
     setCurrentFiscalYear(fiscalYear);
+    // Save session to localStorage
+    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+    localStorage.setItem(STORAGE_KEY_FY, fiscalYear);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem(STORAGE_KEY_USER);
+    localStorage.removeItem(STORAGE_KEY_FY);
   };
 
   const getOrgRef = (subPath: string) => {
@@ -161,11 +183,7 @@ const App: React.FC = () => {
 
   const handleUpdateGeneralSettings = (s: OrganizationSettings) => {
       if (!currentUser) return;
-      
-      // Save to Org-specific settings
       set(getOrgRef('settings'), s);
-      
-      // If SUPER_ADMIN saves, also update the Global App Config for Login page default
       if (currentUser.role === 'SUPER_ADMIN') {
           set(ref(db, 'appConfig/defaultFiscalYear'), s.activeFiscalYear);
       }
@@ -176,10 +194,8 @@ const App: React.FC = () => {
     try {
         const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
         const orgPath = `orgData/${safeOrgName}`;
-        
         const existingSnap = await get(ref(db, `${orgPath}/returnEntries/${entry.id}`));
         const prevStatus = existingSnap.exists() ? existingSnap.val().status : null;
-        
         const updates: Record<string, any> = {};
 
         if (entry.status === 'Approved' && prevStatus !== 'Approved') {
@@ -191,16 +207,13 @@ const App: React.FC = () => {
                 const matchingItem = invList.find(i => 
                     i.itemName.trim().toLowerCase() === retItem.name.trim().toLowerCase()
                 );
-
                 if (matchingItem) {
                     const currentQty = Number(matchingItem.currentQuantity) || 0;
                     const returnQty = Number(retItem.quantity) || 0;
                     const newQty = currentQty + returnQty;
-                    
                     const rate = Number(matchingItem.rate) || 0;
                     const tax = Number(matchingItem.tax) || 0;
                     const newTotal = newQty * rate * (1 + tax / 100);
-
                     updates[`${orgPath}/inventory/${matchingItem.id}`] = {
                         ...matchingItem,
                         currentQuantity: newQty,
@@ -210,7 +223,6 @@ const App: React.FC = () => {
                 }
             }
         }
-
         updates[`${orgPath}/returnEntries/${entry.id}`] = entry;
         await update(ref(db), updates);
     } catch (error) {
@@ -223,29 +235,16 @@ const App: React.FC = () => {
       if (!currentUser) return;
       try {
           const updates: Record<string, any> = {};
-          
-          // Ensure sourceOrg is always set to maintain individual organization sequences
-          const formToSave = {
-              ...f,
-              sourceOrg: f.sourceOrg || currentUser.organizationName
-          };
-
+          const formToSave = { ...f, sourceOrg: f.sourceOrg || currentUser.organizationName };
           const sourceSafeName = formToSave.sourceOrg.trim().replace(/[.#$[\]]/g, "_");
           const targetSafeName = formToSave.targetOrg?.trim().replace(/[.#$[\]]/g, "_");
-
-          // Always save to the source organization (the one who requested)
           updates[`orgData/${sourceSafeName}/magForms/${formToSave.id}`] = formToSave;
-
-          // If Institutional, also save to target organization (the one fulfilling)
           if (formToSave.isInstitutional && targetSafeName) {
             updates[`orgData/${targetSafeName}/magForms/${formToSave.id}`] = formToSave;
           }
-
           if (formToSave.status === 'Approved') {
-              // Workflow automation logic (creating PO or Issue Report)
               const currentSafeOrg = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
               const orgPath = `orgData/${currentSafeOrg}`;
-
               if (formToSave.storeKeeper?.status === 'market') {
                   const poId = `PO-${formToSave.id}`;
                   const poPath = `${orgPath}/purchaseOrders/${poId}`;
@@ -260,21 +259,13 @@ const App: React.FC = () => {
                           return isNaN(val) ? max : Math.max(max, val);
                       }, 0);
                       const nextOrderNo = `${String(maxNo + 1).padStart(4, '0')}-KH`;
-                      const newPO: PurchaseOrderEntry = {
-                          id: poId,
-                          magFormId: formToSave.id,
-                          magFormNo: formToSave.formNo,
-                          requestDate: formToSave.date,
-                          items: formToSave.items,
-                          status: 'Pending',
-                          orderNo: nextOrderNo,
-                          fiscalYear: formToSave.fiscalYear,
-                          preparedBy: { name: '', designation: '', date: '' },
-                          recommendedBy: { name: '', designation: '', date: '' },
-                          financeBy: { name: '', designation: '', date: '' },
-                          approvedBy: { name: '', designation: '', date: '' }
+                      updates[poPath] = {
+                          id: poId, magFormId: formToSave.id, magFormNo: formToSave.formNo,
+                          requestDate: formToSave.date, items: formToSave.items, status: 'Pending',
+                          orderNo: nextOrderNo, fiscalYear: formToSave.fiscalYear,
+                          preparedBy: { name: '', designation: '', date: '' }, recommendedBy: { name: '', designation: '', date: '' },
+                          financeBy: { name: '', designation: '', date: '' }, approvedBy: { name: '', designation: '', date: '' }
                       };
-                      updates[poPath] = newPO;
                   }
               }
               else if (formToSave.storeKeeper?.status === 'stock') {
@@ -282,22 +273,14 @@ const App: React.FC = () => {
                   const irPath = `${orgPath}/issueReports/${irId}`;
                   const irSnap = await get(ref(db, irPath));
                   if (!irSnap.exists()) {
-                      const newIR: IssueReportEntry = {
-                          id: irId,
-                          magFormId: formToSave.id,
-                          magFormNo: formToSave.formNo,
-                          requestDate: formToSave.date,
-                          items: formToSave.items,
-                          status: 'Pending',
-                          fiscalYear: formToSave.fiscalYear,
-                          itemType: formToSave.issueItemType || 'Expendable',
-                          storeId: formToSave.selectedStoreId, 
-                          demandBy: formToSave.demandBy,
-                          preparedBy: { name: '', designation: '', date: '' },
-                          recommendedBy: { name: '', designation: '', date: '' },
+                      updates[irPath] = {
+                          id: irId, magFormId: formToSave.id, magFormNo: formToSave.formNo,
+                          requestDate: formToSave.date, items: formToSave.items, status: 'Pending',
+                          fiscalYear: formToSave.fiscalYear, itemType: formToSave.issueItemType || 'Expendable',
+                          storeId: formToSave.selectedStoreId, demandBy: formToSave.demandBy,
+                          preparedBy: { name: '', designation: '', date: '' }, recommendedBy: { name: '', designation: '', date: '' },
                           approvedBy: { name: '', designation: '', date: '' }
                       };
-                      updates[irPath] = newIR;
                   }
               }
           }
@@ -313,18 +296,14 @@ const App: React.FC = () => {
     try {
         const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
         const orgPath = `orgData/${safeOrgName}`;
-        
         const currentReportSnap = await get(ref(db, `${orgPath}/issueReports/${report.id}`));
         const prevStatus = currentReportSnap.exists() ? currentReportSnap.val().status : null;
-        
         const updates: Record<string, any> = {};
 
         if (report.status === 'Issued' && prevStatus !== 'Issued' && report.storeId) {
             const invSnap = await get(ref(db, `${orgPath}/inventory`));
             const inventory: Record<string, InventoryItem> = invSnap.exists() ? invSnap.val() : {};
             const inventoryKeys = Object.keys(inventory);
-
-            // Fetch Mag Form to update receiver details
             const magFormSnap = await get(ref(db, `${orgPath}/magForms/${report.magFormId}`));
             let linkedMagForm: MagFormEntry | null = magFormSnap.exists() ? magFormSnap.val() : null;
 
@@ -332,7 +311,6 @@ const App: React.FC = () => {
                 let remainingToIssue = Number(rptItem.quantity) || 0;
                 let usedBatches: string[] = [];
                 let firstMatchedCode = ''; 
-
                 const matchingInventoryItems = inventoryKeys
                     .map(key => ({ key, data: inventory[key] }))
                     .filter(item => 
@@ -341,13 +319,11 @@ const App: React.FC = () => {
                         item.data.itemType === report.itemType &&
                         item.data.currentQuantity > 0
                     );
-
                 matchingInventoryItems.sort((a, b) => {
                     const dateA = a.data.expiryDateAd ? new Date(a.data.expiryDateAd).getTime() : Infinity;
                     const dateB = b.data.expiryDateAd ? new Date(b.data.expiryDateAd).getTime() : Infinity;
                     return dateA - dateB;
                 });
-
                 for (const invMatch of matchingInventoryItems) {
                     if (remainingToIssue <= 0) break;
                     const invItem = invMatch.data;
@@ -355,65 +331,36 @@ const App: React.FC = () => {
                     const takeQty = Math.min(availableQty, remainingToIssue);
                     const newQty = availableQty - takeQty;
                     remainingToIssue -= takeQty;
-
-                    if (!firstMatchedCode) {
-                        firstMatchedCode = invItem.uniqueCode || invItem.sanketNo || '';
-                    }
-
-                    if (invItem.batchNo) {
-                        usedBatches.push(`B:${invItem.batchNo}(${takeQty}${invItem.unit})`);
-                    }
-
+                    if (!firstMatchedCode) firstMatchedCode = invItem.uniqueCode || invItem.sanketNo || '';
+                    if (invItem.batchNo) usedBatches.push(`B:${invItem.batchNo}(${takeQty}${invItem.unit})`);
                     const rate = Number(invItem.rate) || 0;
                     const tax = Number(invItem.tax) || 0;
-                    const newTotal = newQty * rate * (1 + tax / 100);
-
                     updates[`${orgPath}/inventory/${invMatch.key}`] = {
-                        ...invItem,
-                        currentQuantity: newQty,
-                        totalAmount: newTotal,
+                        ...invItem, currentQuantity: newQty, totalAmount: newQty * rate * (1 + tax / 100),
                         lastUpdateDateBs: report.issueDate || report.requestDate,
                     };
                 }
-
                 const batchSuffix = usedBatches.length > 0 ? ` [Batch: ${usedBatches.join(', ')}]` : '';
                 const newRemarks = rptItem.remarks ? `${rptItem.remarks}${batchSuffix}` : batchSuffix.trim();
-                
                 if (linkedMagForm) {
                     linkedMagForm.items = linkedMagForm.items.map(mItem => {
-                        if (mItem.name.trim().toLowerCase() === rptItem.name.trim().toLowerCase()) {
-                            return { ...mItem, remarks: newRemarks };
-                        }
+                        if (mItem.name.trim().toLowerCase() === rptItem.name.trim().toLowerCase()) return { ...mItem, remarks: newRemarks };
                         return mItem;
                     });
                 }
-
-                return { 
-                    ...rptItem, 
-                    remarks: newRemarks,
-                    codeNo: firstMatchedCode || rptItem.codeNo 
-                };
+                return { ...rptItem, remarks: newRemarks, codeNo: firstMatchedCode || rptItem.codeNo };
             });
 
             report.items = updatedReportItems;
-
             if (linkedMagForm) {
-                // AUTO-FILL RECEIVER DETAILS UPON ISSUE APPROVAL
-                linkedMagForm.receiver = {
-                    name: linkedMagForm.demandBy?.name || '',
-                    designation: linkedMagForm.demandBy?.designation || '',
-                    date: report.issueDate || report.requestDate
-                };
-
+                linkedMagForm.receiver = { name: linkedMagForm.demandBy?.name || '', designation: linkedMagForm.demandBy?.designation || '', date: report.issueDate || report.requestDate };
                 const sourceSafeName = linkedMagForm.sourceOrg?.trim().replace(/[.#$[\]]/g, "_");
                 const targetSafeName = linkedMagForm.targetOrg?.trim().replace(/[.#$[\]]/g, "_");
-
                 if (sourceSafeName) updates[`orgData/${sourceSafeName}/magForms/${linkedMagForm.id}`] = linkedMagForm;
                 if (targetSafeName) updates[`orgData/${targetSafeName}/magForms/${linkedMagForm.id}`] = linkedMagForm;
                 if (!linkedMagForm.isInstitutional) updates[`${orgPath}/magForms/${linkedMagForm.id}`] = linkedMagForm;
             }
         }
-
         updates[`${orgPath}/issueReports/${report.id}`] = report;
         await update(ref(db), updates);
     } catch (error) {
@@ -427,94 +374,58 @@ const App: React.FC = () => {
       try {
           const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
           const orgPath = `orgData/${safeOrgName}`;
-          
           const requestRef = ref(db, `${orgPath}/stockRequests/${requestId}`);
           const requestSnap = await get(requestRef);
           if (!requestSnap.exists()) return;
           const request: StockEntryRequest = requestSnap.val();
-          
           const invAllSnap = await get(ref(db, `${orgPath}/inventory`));
           const currentInvData = invAllSnap.val() || {};
           const currentInvList: InventoryItem[] = Object.keys(currentInvData).map(k => ({ ...currentInvData[k], id: k }));
-
           const updates: Record<string, any> = {};
           const dakhilaItems: DakhilaItem[] = [];
 
           for (const item of request.items) {
               const existingItem = currentInvList.find(i => 
-                  i.itemName.trim().toLowerCase() === item.itemName.trim().toLowerCase() && 
-                  i.storeId === request.storeId &&
-                  i.itemType === item.itemType &&
-                  i.batchNo === item.batchNo && 
-                  i.expiryDateAd === item.expiryDateAd
+                  i.itemName.trim().toLowerCase() === item.itemName.trim().toLowerCase() && i.storeId === request.storeId &&
+                  i.itemType === item.itemType && i.batchNo === item.batchNo && i.expiryDateAd === item.expiryDateAd
               );
-
               const incomingQty = Number(item.currentQuantity) || 0;
               const incomingRate = Number(item.rate) || 0;
               const incomingTax = Number(item.tax) || 0;
               const incomingTotal = incomingQty * incomingRate * (1 + incomingTax / 100);
 
               dakhilaItems.push({
-                  id: Date.now() + Math.random(),
-                  name: item.itemName,
-                  codeNo: item.sanketNo || item.uniqueCode || '',
-                  specification: item.specification || '',
-                  source: request.receiptSource,
-                  unit: item.unit,
-                  quantity: incomingQty,
-                  rate: incomingRate,
-                  totalAmount: incomingQty * incomingRate,
-                  vatAmount: (incomingQty * incomingRate) * (incomingTax / 100),
-                  grandTotal: incomingTotal,
-                  otherExpenses: 0,
-                  finalTotal: incomingTotal,
-                  remarks: item.remarks || ''
+                  id: Date.now() + Math.random(), name: item.itemName, codeNo: item.sanketNo || item.uniqueCode || '',
+                  specification: item.specification || '', source: request.receiptSource, unit: item.unit, quantity: incomingQty,
+                  rate: incomingRate, totalAmount: incomingQty * incomingRate, vatAmount: (incomingQty * incomingRate) * (incomingTax / 100),
+                  grandTotal: incomingTotal, otherExpenses: 0, finalTotal: incomingTotal, remarks: item.remarks || ''
               });
 
               if (existingItem) {
                   const newQty = (Number(existingItem.currentQuantity) || 0) + incomingQty;
-                  const newVal = (Number(existingItem.totalAmount) || 0) + incomingTotal;
                   updates[`${orgPath}/inventory/${existingItem.id}`] = {
-                      ...existingItem,
-                      currentQuantity: newQty,
-                      totalAmount: newVal,
-                      lastUpdateDateBs: request.requestDateBs,
-                      lastUpdateDateAd: request.requestDateAd,
+                      ...existingItem, currentQuantity: newQty, totalAmount: (Number(existingItem.totalAmount) || 0) + incomingTotal,
+                      lastUpdateDateBs: request.requestDateBs, lastUpdateDateAd: request.requestDateAd,
                       dakhilaNo: request.dakhilaNo || item.dakhilaNo || existingItem.dakhilaNo
                   };
               } else {
                   const newId = item.id.startsWith('TEMP') ? `ITEM-${Date.now()}-${Math.random().toString(36).substring(7)}` : item.id;
                   updates[`${orgPath}/inventory/${newId}`] = {
-                      ...item,
-                      id: newId,
-                      currentQuantity: incomingQty,
-                      totalAmount: incomingTotal,
-                      lastUpdateDateBs: request.requestDateBs,
-                      lastUpdateDateAd: request.requestDateAd,
-                      storeId: request.storeId,
-                      fiscalYear: request.fiscalYear,
-                      dakhilaNo: request.dakhilaNo || item.dakhilaNo
+                      ...item, id: newId, currentQuantity: incomingQty, totalAmount: incomingTotal,
+                      lastUpdateDateBs: request.requestDateBs, lastUpdateDateAd: request.requestDateAd,
+                      storeId: request.storeId, fiscalYear: request.fiscalYear, dakhilaNo: request.dakhilaNo || item.dakhilaNo
                   };
               }
           }
-
           updates[`${orgPath}/stockRequests/${requestId}/status`] = 'Approved';
           updates[`${orgPath}/stockRequests/${requestId}/approvedBy`] = approverName;
-
           const formalDakhilaId = `DA-${Date.now()}`;
-          const formalReport: DakhilaPratibedanEntry = {
-              id: formalDakhilaId,
-              fiscalYear: request.fiscalYear,
-              dakhilaNo: request.dakhilaNo || (request.items[0]?.dakhilaNo) || formalDakhilaId,
-              date: request.requestDateBs,
-              orderNo: request.refNo || 'BULK-ENTRY',
-              items: dakhilaItems,
-              status: 'Final',
+          updates[`${orgPath}/dakhilaReports/${formalDakhilaId}`] = {
+              id: formalDakhilaId, fiscalYear: request.fiscalYear, dakhilaNo: request.dakhilaNo || (request.items[0]?.dakhilaNo) || formalDakhilaId,
+              date: request.requestDateBs, orderNo: request.refNo || 'BULK-ENTRY', items: dakhilaItems, status: 'Final',
               preparedBy: { name: request.requesterName || request.requestedBy, designation: request.requesterDesignation || 'Staff', date: request.requestDateBs },
               approvedBy: { name: approverName, designation: approverDesignation, date: request.requestDateBs }
           };
-          updates[`${orgPath}/dakhilaReports/${formalDakhilaId}`] = formalReport;
-
           await update(ref(db), updates);
       } catch (error) {
           console.error("Critical Error during stock approval:", error);
@@ -526,7 +437,7 @@ const App: React.FC = () => {
     <>
       {currentUser ? (
         <Dashboard 
-          onLogout={() => setCurrentUser(null)} 
+          onLogout={handleLogout} 
           currentUser={currentUser}
           currentFiscalYear={currentFiscalYear} 
           users={allUsers}
@@ -543,37 +454,12 @@ const App: React.FC = () => {
           issueReports={issueReports}
           onUpdateIssueReport={handleApproveIssueReport} 
           rabiesPatients={rabiesPatients}
-          onAddRabiesPatient={async (p) => {
-              try {
-                  await set(getOrgRef(`rabiesPatients/${p.id}`), p);
-              } catch (e) {
-                  console.error("Firebase error adding rabies patient:", e);
-                  alert("डाटाबेस सुरक्षित गर्न सकिएन।");
-              }
-          }}
-          onUpdateRabiesPatient={async (p) => {
-              try {
-                  await set(getOrgRef(`rabiesPatients/${p.id}`), p);
-              } catch (e) {
-                  console.error("Firebase error updating rabies patient:", e);
-              }
-          }}
+          onAddRabiesPatient={async (p) => { await set(getOrgRef(`rabiesPatients/${p.id}`), p); }}
+          onUpdateRabiesPatient={async (p) => { await set(getOrgRef(`rabiesPatients/${p.id}`), p); }}
           onDeletePatient={(id) => remove(getOrgRef(`rabiesPatients/${id}`))}
           tbPatients={tbPatients}
-          onAddTBPatient={async (p) => {
-              try {
-                  await set(getOrgRef(`tbPatients/${p.id}`), p);
-              } catch (e) {
-                  console.error("Firebase error adding TB patient:", e);
-              }
-          }}
-          onUpdateTBPatient={async (p) => {
-              try {
-                  await set(getOrgRef(`tbPatients/${p.id}`), p);
-              } catch (e) {
-                  console.error("Firebase error updating TB patient:", e);
-              }
-          }}
+          onAddTBPatient={async (p) => { await set(getOrgRef(`tbPatients/${p.id}`), p); }}
+          onUpdateTBPatient={async (p) => { await set(getOrgRef(`tbPatients/${p.id}`), p); }}
           onDeleteTBPatient={(id) => remove(getOrgRef(`tbPatients/${id}`))}
           firms={firms}
           onAddFirm={(f) => set(getOrgRef(`firms/${f.id}`), f)}

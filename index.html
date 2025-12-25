@@ -3,7 +3,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Smart Inventory - Login Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -38,9 +38,23 @@
     <style>
       body {
         font-family: 'Inter', sans-serif;
+        /* Prevent pull-to-refresh on mobile devices */
+        overscroll-behavior-y: none;
       }
       .font-nepali { font-family: 'Mukta', sans-serif; }
       
+      /* Smooth scrolling but preventing bounce */
+      html, body {
+        height: 100%;
+        overflow: hidden;
+      }
+
+      #root {
+        height: 100%;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
       /* Print related styles */
       @media print {
         .no-print {
@@ -50,9 +64,13 @@
           background-color: white !important;
           padding: 0 !important;
           margin: 0 !important;
+          overflow: visible !important;
+          height: auto !important;
         }
         #root {
           padding: 0 !important;
+          overflow: visible !important;
+          height: auto !important;
         }
       }
     </style>
