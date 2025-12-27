@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { LoginForm } from './components/LoginForm';
 import { Dashboard } from './components/Dashboard';
 import { APP_NAME, ORG_NAME } from './constants';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Boxes } from 'lucide-react';
 import { User, OrganizationSettings, MagFormEntry, RabiesPatient, PurchaseOrderEntry, IssueReportEntry, FirmEntry, QuotationEntry, InventoryItem, Store, StockEntryRequest, DakhilaPratibedanEntry, ReturnEntry, MarmatEntry, DhuliyaunaEntry, LogBookEntry, DakhilaItem, TBPatient, HafaEntry, HafaItem } from './types';
 import { db } from './firebase';
 import { ref, onValue, set, remove, update, get, Unsubscribe } from "firebase/database";
@@ -41,7 +41,6 @@ const DEFAULT_ADMIN: User = {
 
 const STORAGE_KEY_USER = 'smart_inventory_active_user';
 const STORAGE_KEY_FY = 'smart_inventory_active_fy';
-const LOGO_URL = "https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6";
 
 const App: React.FC = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]); 
@@ -273,31 +272,32 @@ const App: React.FC = () => {
       ) : (
         <div className="min-h-screen w-full bg-slate-50 flex items-center justify-center p-4">
           <div className="w-full max-w-[420px] animate-in fade-in zoom-in-95 duration-500">
-            <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200">
-              <div className="bg-primary-600 p-10 text-center text-white">
-                <div className="bg-white w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/30 overflow-hidden p-2">
-                    <img src={LOGO_URL} alt="App Logo" className="w-full h-full object-contain" />
+            <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+              <div className="bg-primary-600 p-10 text-center text-white relative">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-5 shadow-2xl border-4 border-primary-500/30 group hover:scale-105 transition-transform duration-300">
+                    <Boxes size={48} className="text-primary-600" />
                 </div>
-                <h1 className="text-3xl font-bold font-nepali tracking-tight">{APP_NAME}</h1>
-                <p className="text-[13px] font-nepali text-primary-100 mt-1 opacity-90">जिन्सी व्यवस्थापन अब तपाइँको हातमा</p>
-                <p className="text-primary-200 text-[10px] mt-2 uppercase font-bold tracking-widest opacity-60">Login Portal</p>
+                <h1 className="text-3xl font-bold font-nepali tracking-tight drop-shadow-sm">{APP_NAME}</h1>
+                <p className="text-[13px] font-nepali text-primary-50 mt-1.5 opacity-90 font-medium">जिन्सी व्यवस्थापन अब तपाइँको हातमा</p>
+                <p className="text-primary-200 text-[10px] mt-3 uppercase font-bold tracking-[0.2em] opacity-60">Secure Login Portal</p>
               </div>
-              <div className="p-8">
+              <div className="p-8 bg-white">
                 <LoginForm 
                     users={allUsers} 
                     onLoginSuccess={handleLoginSuccess} 
                     initialFiscalYear={appDefaultFiscalYear} 
                 />
               </div>
-              <div className="bg-slate-50 p-4 text-center border-t border-slate-100">
+              <div className="bg-slate-50 p-5 text-center border-t border-slate-100">
                  <div className="flex items-center justify-center gap-2 text-slate-400">
-                    <ShieldCheck size={14} />
-                    <span className="text-[10px] font-bold uppercase tracking-tight">Protected Database | v2.0</span>
+                    <ShieldCheck size={14} className="text-primary-500" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Protected Database | v2.0</span>
                  </div>
               </div>
             </div>
-            <p className="text-center mt-6 text-slate-400 text-xs font-bold uppercase tracking-widest">
-                &copy; {new Date().getFullYear()} {APP_NAME}
+            <p className="text-center mt-8 text-slate-400 text-[10px] font-bold uppercase tracking-[0.25em]">
+                &copy; {new Date().getFullYear()} {APP_NAME.toUpperCase()} CLOUD
             </p>
           </div>
         </div>

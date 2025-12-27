@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Syringe, Activity, 
   ClipboardList, FileSpreadsheet, FilePlus, ShoppingCart, FileOutput, 
   BookOpen, Book, Archive, RotateCcw, Wrench, Scroll, BarChart3,
-  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User, Printer, SearchX, AlertOctagon, GraduationCap, Award, Search, Eye, Award as AwardIcon, Download, TrendingDown, Clipboard, Beaker, ArrowRightLeft, Droplets, FlaskConical
+  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User, Printer, SearchX, AlertOctagon, GraduationCap, Award, Search, Eye, Award as AwardIcon, Download, TrendingDown, Clipboard, Beaker, ArrowRightLeft, Droplets, FlaskConical, Boxes
 } from 'lucide-react';
 import { APP_NAME, ORG_NAME, FISCAL_YEARS } from '../constants';
 import { DashboardProps, PurchaseOrderEntry, InventoryItem, RabiesPatient, HafaEntry } from '../types'; 
@@ -425,7 +425,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
     <div className="flex h-[100dvh] w-full bg-slate-50 font-sans overflow-hidden">
       {isSidebarOpen && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] no-print" onClick={() => setIsSidebarOpen(false)} />)}
       <aside className={`fixed z-[110] h-full bg-slate-900 text-white flex flex-col shadow-2xl transition-all duration-300 ease-in-out no-print ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} w-[280px]`}>
-        <div className="p-6 border-b border-slate-800 flex items-center gap-3 bg-slate-950 shrink-0"><div className="bg-primary-600 p-2 rounded-lg"><Activity size={20} className="text-white" /></div><div className="overflow-hidden"><h2 className="font-nepali font-bold text-lg leading-tight truncate">{APP_NAME}</h2><p className="text-[10px] text-slate-400 font-nepali truncate">{currentUser.organizationName}</p></div></div>
+        <div className="p-6 border-b border-slate-800 flex items-center gap-3 bg-slate-950 shrink-0">
+          <div className="bg-white/10 w-10 h-10 rounded-xl flex items-center justify-center border border-white/20">
+            <Boxes size={24} className="text-primary-400" />
+          </div>
+          <div className="overflow-hidden">
+            <h2 className="font-nepali font-bold text-lg leading-tight truncate">{APP_NAME}</h2>
+            <p className="text-[10px] text-slate-400 font-nepali truncate">{currentUser.organizationName}</p>
+          </div>
+        </div>
         <nav className="flex-1 p-3 space-y-1 custom-scrollbar">
              {menuItems.map((item: any) => (
                <div key={item.id}>
