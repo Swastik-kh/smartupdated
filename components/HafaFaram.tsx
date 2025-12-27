@@ -31,6 +31,8 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isViewOnly, setIsViewOnly] = useState(false);
     const [validationError, setValidationError] = useState<string | null>(null);
+    const [showRejectModal, setShowRejectModal] = useState(false);
+    const [rejectionReason, setRejectionReason] = useState('');
 
     const todayBS = useMemo(() => {
         try {
@@ -62,7 +64,6 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
     });
 
     const isApprover = ['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role);
-    const isStoreKeeper = currentUser.role === 'STOREKEEPER';
 
     const itemOptions = useMemo(() => inventoryItems.map(item => ({
         id: item.id,
@@ -70,6 +71,16 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
         label: `${item.itemName} (${item.unit}) - मौज्दात: ${item.currentQuantity} [${item.uniqueCode || item.sanketNo || ''}]`,
         itemData: item
     })), [inventoryItems]);
+
+    const actionableEntries = useMemo(() => {
+        if (!isApprover) return [];
+        return existingEntries.filter(e => e.status === 'Pending').sort((a, b) => b.id.localeCompare(a.id));
+    }, [existingEntries, isApprover]);
+
+    const historyEntries = useMemo(() => {
+        return existingEntries.filter(e => isApprover ? e.status !== 'Pending' : true)
+            .sort((a, b) => b.id.localeCompare(a.id));
+    }, [existingEntries, isApprover]);
 
     const generateFormNo = useCallback(() => {
         const fyEntries = existingEntries.filter(e => e.fiscalYear === currentFiscalYear);
@@ -134,20 +145,20 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
         }
     };
 
-    const handleSave = (statusToSet: 'Pending' | 'Approved' = 'Pending') => {
+    const handleSave = (statusToSet: 'Pending' | 'Approved' | 'Rejected' = 'Pending') => {
         setValidationError(null);
         if (!formDetails.recipientOrg) { setValidationError("प्राप्त गर्ने कार्यालयको नाम आवश्यक छ।"); return; }
         
         const entry: HafaEntry = {
             ...formDetails,
-            id: editingId || Date.now().toString(),
+            id: editingId && editingId !== 'new' ? editingId : Date.now().toString(),
             items: items,
             status: statusToSet,
             approvedBy: statusToSet === 'Approved' ? { name: currentUser.fullName, designation: currentUser.designation, date: todayBS } : formDetails.approvedBy
         };
 
         onSave(entry);
-        alert(statusToSet === 'Approved' ? "हस्तान्तरण फारम स्वीकृत भयो।" : "हस्तान्तरण फारम सुरक्षित भयो।");
+        alert(statusToSet === 'Approved' ? "हस्तान्तरण फारम स्वीकृत भयो।" : statusToSet === 'Rejected' ? "हस्तान्तरण फारम अस्वीकृत गरियो।" : "हस्तान्तरण फारम सुरक्षित गरियो र एडमिन स्वीकृतिको लागि पठाइयो।");
         handleReset();
     };
 
@@ -156,6 +167,8 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
         setEditingId(null);
         setIsViewOnly(false);
         setValidationError(null);
+        setShowRejectModal(false);
+        setRejectionReason('');
         setItems([{ id: Date.now(), codeNo: '', name: '', specification: '', model: '', idNo: '', unit: '', quantity: 1, rate: 0, totalAmount: 0, startDate: '', condition: 'चालू', remarks: '' }]);
         setFormDetails({
             id: '', fiscalYear: currentFiscalYear, formNo: generateFormNo(), date: todayBS, status: 'Pending',
@@ -189,23 +202,52 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                     </button>
                 </div>
 
+                {isApprover && actionableEntries.length > 0 && (
+                    <div className="bg-white rounded-xl border border-orange-200 shadow-sm overflow-hidden mb-6">
+                        <div className="bg-orange-50 px-6 py-3 border-b border-orange-100 flex justify-between items-center text-orange-800">
+                            <div className="flex items-center gap-2"><Clock size={18} /><h3 className="font-bold font-nepali">स्वीकृतिको लागि बाँकी (Actionable)</h3></div>
+                            <span className="bg-orange-200 text-xs font-bold px-2 py-0.5 rounded-full">{actionableEntries.length} Forms</span>
+                        </div>
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-600 font-medium">
+                                <tr><th className="px-6 py-3">फारम नं</th><th className="px-6 py-3">मिति</th><th className="px-6 py-3">प्राप्त गर्ने कार्यालय</th><th className="px-6 py-3 text-right">Action</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {actionableEntries.map(e => (
+                                    <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-6 py-4 font-mono font-bold text-slate-700">#{e.formNo}</td>
+                                        <td className="px-6 py-4 font-nepali">{e.date}</td>
+                                        <td className="px-6 py-4">{e.recipientOrg}</td>
+                                        <td className="px-6 py-4 text-right">
+                                            <button onClick={() => handleLoadEntry(e, false)} className="text-primary-600 font-bold hover:underline bg-primary-50 px-3 py-1.5 rounded-lg">Review & Approve</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 text-slate-700 font-bold font-nepali flex items-center gap-2"><FileText size={18} /> फारमहरूको सूची (History)</div>
+                    <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 text-slate-700 font-bold font-nepali flex items-center gap-2"><FileText size={18} /> फारम इतिहास (History)</div>
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 text-slate-500 font-medium">
                             <tr><th className="px-6 py-3">फारम नं</th><th className="px-6 py-3">मिति</th><th className="px-6 py-3">प्राप्त गर्ने कार्यालय</th><th className="px-6 py-3">अवस्था</th><th className="px-6 py-3 text-right">Action</th></tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {existingEntries.length === 0 ? (
+                            {historyEntries.length === 0 ? (
                                 <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-400 italic">कुनै हस्तान्तरण फारम भेटिएन।</td></tr>
                             ) : (
-                                existingEntries.map(e => (
+                                historyEntries.map(e => (
                                     <tr key={e.id} className="hover:bg-slate-50">
                                         <td className="px-6 py-4 font-mono font-bold text-slate-700">#{e.formNo}</td>
                                         <td className="px-6 py-4 font-nepali">{e.date}</td>
                                         <td className="px-6 py-4">{e.recipientOrg}</td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${e.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>{e.status}</span>
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                                e.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : 
+                                                e.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                'bg-orange-50 text-orange-700 border-orange-200'}`}>{e.status}</span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <button onClick={() => handleLoadEntry(e, true)} className="p-2 text-slate-400 hover:text-primary-600"><Eye size={18} /></button>
@@ -233,9 +275,14 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                     {!isViewOnly && (
                         <>
                             {isApprover && formDetails.status === 'Pending' && editingId && (
-                                <button onClick={() => handleSave('Approved')} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold shadow-sm hover:bg-green-700"><ShieldCheck size={18} className="inline mr-2" /> स्वीकृत गर्नुहोस्</button>
+                                <>
+                                    <button onClick={() => setShowRejectModal(true)} className="bg-red-50 text-red-600 border border-red-200 px-6 py-2 rounded-lg font-bold hover:bg-red-100 transition-all">अस्वीकार (Reject)</button>
+                                    <button onClick={() => handleSave('Approved')} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold shadow-sm hover:bg-green-700"><ShieldCheck size={18} className="inline mr-2" /> स्वीकृत गर्नुहोस्</button>
+                                </>
                             )}
-                            <button onClick={() => handleSave('Pending')} className="bg-primary-600 text-white px-6 py-2 rounded-lg font-bold shadow-sm hover:bg-primary-700"><Save size={18} className="inline mr-2" /> सुरक्षित गर्नुहोस्</button>
+                            {(!editingId || editingId === 'new') && (
+                                <button onClick={() => handleSave('Pending')} className="bg-primary-600 text-white px-6 py-2 rounded-lg font-bold shadow-sm hover:bg-primary-700"><Send size={18} className="inline mr-2" /> सुरक्षित गरि पठाउनुहोस्</button>
+                            )}
                         </>
                     )}
                     <button onClick={() => window.print()} className="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold"><Printer size={18} className="inline mr-2" /> प्रिन्ट</button>
@@ -418,6 +465,30 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                     </div>
                 </div>
             </div>
+
+            {showRejectModal && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setShowRejectModal(false)}></div>
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="px-6 py-4 border-b bg-red-600 text-white flex justify-between items-center">
+                            <h3 className="font-bold font-nepali">अस्वीकार गर्नुहोस् (Reject Form)</h3>
+                            <button onClick={() => setShowRejectModal(false)}><X size={20}/></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <textarea 
+                                className="w-full border border-slate-300 rounded-xl p-4 text-sm focus:ring-4 focus:ring-red-500/10 focus:border-red-500 outline-none min-h-[120px]"
+                                placeholder="कारण लेख्नुहोस्..."
+                                value={rejectionReason}
+                                onChange={(e) => setRejectionReason(e.target.value)}
+                            />
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button onClick={() => setShowRejectModal(false)} className="px-6 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-lg">रद्द</button>
+                                <button onClick={() => handleSave('Rejected')} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold shadow-lg hover:bg-red-700">अस्वीकार गर्नुहोस्</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

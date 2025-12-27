@@ -121,6 +121,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
   };
 
+  const pendingHafaCount = useMemo(() => {
+    if (!['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) return 0;
+    return hafaEntries.filter(e => e.status === 'Pending').length;
+  }, [hafaEntries, currentUser.role]);
+
+  const pendingNikashaCount = useMemo(() => {
+    if (currentUser.role === 'STOREKEEPER') {
+      return issueReports.filter(r => r.status === 'Pending').length;
+    }
+    if (['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) {
+      return issueReports.filter(r => r.status === 'Pending Approval').length;
+    }
+    return 0;
+  }, [issueReports, currentUser.role]);
+
+  const pendingDakhilaCount = useMemo(() => {
+    if (!['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) return 0;
+    return stockEntryRequests.filter(r => r.status === 'Pending').length;
+  }, [stockEntryRequests, currentUser.role]);
+
+  const pendingReturnCount = useMemo(() => {
+    if (!['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) return 0;
+    return returnEntries.filter(e => e.status === 'Pending').length;
+  }, [returnEntries, currentUser.role]);
+
+  const pendingMarmatCount = useMemo(() => {
+    if (!['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) return 0;
+    return marmatEntries.filter(e => e.status === 'Pending').length;
+  }, [marmatEntries, currentUser.role]);
+
   const stats = useMemo(() => {
     const today = new NepaliDate();
     const todayStr = today.format('YYYY-MM-DD'); 
@@ -254,6 +284,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             { id: 'kharid_adesh', label: 'खरिद आदेश', icon: <ShoppingCart size={16} /> }, 
             { id: 'nikasha_pratibedan', label: 'निकासा प्रतिवेदन', icon: <FileOutput size={16} /> },
             { id: 'hafa_faram', label: 'हा.फा. फारम', icon: <ArrowRightCircle size={16} /> },
+            { id: 'jinshi_firta_khata', label: 'जिन्सी फिर्ता फारम', icon: <RotateCcw size={16} /> },
+            { id: 'marmat_adesh', label: 'मर्मत आदेश', icon: <Wrench size={16} /> },
             { id: 'jinshi_khata', label: 'जिन्सी खाता', icon: <Book size={16} /> },
             { id: 'dakhila_pratibedan', label: 'दाखिला प्रतिवेदन', icon: <Archive size={16} /> }
         ] },
@@ -494,7 +526,37 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   {item.subItems && expandedMenu === item.id && (
                       <div className="mt-1 ml-4 pl-3 border-l border-slate-800 space-y-1">
                           {item.subItems.map((sub: any) => (
-                              <button key={sub.id} onClick={() => handleSubItemClick(sub.id)} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-nepali ${activeItem === sub.id ? 'bg-slate-800 text-primary-300' : 'text-slate-500 hover:text-slate-200'}`}><div className="flex items-center gap-2">{sub.icon}<span>{sub.label}</span></div></button>
+                              <button key={sub.id} onClick={() => handleSubItemClick(sub.id)} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-nepali ${activeItem === sub.id ? 'bg-slate-800 text-primary-300' : 'text-slate-500 hover:text-slate-200'}`}>
+                                <div className="flex items-center gap-2">
+                                  {sub.icon}
+                                  <span>{sub.label}</span>
+                                </div>
+                                {sub.id === 'hafa_faram' && pendingHafaCount > 0 && (
+                                  <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm ring-1 ring-white/20">
+                                    {pendingHafaCount}
+                                  </span>
+                                )}
+                                {sub.id === 'nikasha_pratibedan' && pendingNikashaCount > 0 && (
+                                  <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm ring-1 ring-white/20">
+                                    {pendingNikashaCount}
+                                  </span>
+                                )}
+                                {sub.id === 'dakhila_pratibedan' && pendingDakhilaCount > 0 && (
+                                  <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm ring-1 ring-white/20">
+                                    {pendingDakhilaCount}
+                                  </span>
+                                )}
+                                {sub.id === 'jinshi_firta_khata' && pendingReturnCount > 0 && (
+                                  <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm ring-1 ring-white/20">
+                                    {pendingReturnCount}
+                                  </span>
+                                )}
+                                {sub.id === 'marmat_adesh' && pendingMarmatCount > 0 && (
+                                  <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm ring-1 ring-white/20">
+                                    {pendingMarmatCount}
+                                  </span>
+                                )}
+                              </button>
                           ))}
                       </div>
                   )}
