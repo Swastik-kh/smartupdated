@@ -142,6 +142,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
           onKeyDown={handleUsernameKeyDown} 
           error={errors.username}
           icon={<User size={18} />}
+          autoComplete="username"
         />
 
         <div className="relative">
@@ -155,6 +156,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
             onChange={handleChange}
             error={errors.password}
             icon={<Lock size={18} />}
+            autoComplete="current-password"
           />
           <button
             type="button"
