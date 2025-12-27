@@ -275,6 +275,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             { id: 'general_setting', label: 'सामान्य सेटिङ', icon: <Sliders size={16} /> }, 
             { id: 'store_setup', label: 'स्टोर सेटअप', icon: <Store size={16} /> }, 
             { id: 'user_management', label: 'प्रयोगकर्ता सेटअप', icon: <Users size={16} /> }, 
+            { id: 'database_management', label: 'डाटाबेस व्यवस्थापन', icon: <Database size={16} /> },
             { id: 'change_password', label: 'पासवर्ड परिवर्तन', icon: <KeyRound size={16} /> }
         ] }
     ];
@@ -359,7 +360,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       case 'change_password': return <ChangePassword currentUser={currentUser} users={users} onChangePassword={onChangePassword} />;
       case 'store_setup': return <StoreSetup currentFiscalYear={currentFiscalYear} stores={stores} onAddStore={onAddStore} onUpdateStore={onUpdateStore} onDeleteStore={onDeleteStore} inventoryItems={inventoryItems} onUpdateInventoryItem={onUpdateInventoryItem} />;
       case 'tb_leprosy': return <TBPatientRegistration currentFiscalYear={currentFiscalYear} currentUser={currentUser} patients={tbPatients} onAddPatient={onAddTBPatient} onUpdatePatient={onUpdateTBPatient} onDeletePatient={onDeleteTBPatient} />;
-      /* Fixed: Changed onUpdatePatient to onUpdateRabiesPatient which is passed as a prop */
       case 'rabies': return <RabiesRegistration currentFiscalYear={currentFiscalYear} patients={rabiesPatients} onAddPatient={onAddRabiesPatient} onUpdatePatient={onUpdateRabiesPatient} onDeletePatient={onDeletePatient} currentUser={currentUser} />;
       case 'mag_faram': return <MagFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} existingForms={magForms} onSave={onSaveMagForm} inventoryItems={inventoryItems} stores={stores} generalSettings={generalSettings} allUsers={users} issueReports={issueReports} />;
       case 'hafa_faram': return <HafaFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} existingEntries={hafaEntries} onSave={onSaveHafaEntry} onDelete={onDeleteHafaEntry} inventoryItems={inventoryItems} stores={stores} generalSettings={generalSettings} users={users} />;

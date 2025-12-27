@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Package, Calendar, Plus, RotateCcw, Save, X, CheckCircle2, Search, 
   ArrowUpCircle, ArrowDownCircle, Warehouse, DollarSign, Tag, ClipboardList, Barcode,
-  Hash, BookOpen, Layers, ScrollText, Store as StoreIcon, User, FileText, Filter, PieChart, Send, Info, Edit, Calculator, SlidersHorizontal, BarChart4, ChevronRight, History, CheckSquare, List, Building2, Loader2
+  Hash, BookOpen, Layers, ScrollText, Store as StoreIcon, User, FileText, Filter, PieChart, Send, Info, Edit, Calculator, SlidersHorizontal, BarChart4, ChevronRight, History, CheckSquare, List, Building2, Loader2, Sparkles
 } from 'lucide-react';
 import { Input } from './Input';
 import { Select } from './Select';
@@ -857,19 +857,35 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Warehouse size={24} /></div>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full -mr-16 -mt-16 opacity-40"></div>
+        <div className="flex items-center gap-4 relative z-10">
+          <div className="bg-indigo-600 p-3 rounded-2xl text-white shadow-lg shadow-indigo-100">
+            <Warehouse size={28} />
+          </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-800 font-nepali">जिन्सी मौज्दात (Inventory Stock)</h2>
-            <p className="text-sm text-slate-500">हालको मौज्दात र विस्तृत विवरणहरू</p>
+            <h2 className="text-2xl font-black text-slate-800 font-nepali">जिन्सी मौज्दात (Inventory Stock)</h2>
+            <p className="text-sm text-slate-500 font-medium">स्टक प्रविष्टि, ओपनिङ्ग र विवरण व्यवस्थापन</p>
           </div>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
+        
+        <div className="flex gap-3 w-full md:w-auto relative z-10">
             {!isSuperAdmin && (
                 <>
-                    <button onClick={() => handleOpenBulkModal('opening')} className="flex-1 md:flex-none flex items-center gap-2 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors justify-center"><ArrowUpCircle size={18} /><span className="font-nepali">ओपनिङ्ग (Opening)</span></button>
-                    <button onClick={() => handleOpenBulkModal('add')} className="flex-1 md:flex-none flex items-center gap-2 px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-lg text-sm font-medium shadow-sm transition-colors justify-center"><Plus size={18} /><span className="font-nepali">दाखिला (Add Stock)</span></button>
+                    <button 
+                        onClick={() => handleOpenBulkModal('opening')} 
+                        className="group flex-1 md:flex-none flex items-center gap-2 px-6 py-3 bg-white border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl text-sm font-black shadow-sm transition-all justify-center active:scale-95"
+                    >
+                        <ArrowUpCircle size={20} className="group-hover:scale-110 transition-transform" />
+                        <span className="font-nepali">ओपनिङ्ग (Opening)</span>
+                    </button>
+                    <button 
+                        onClick={() => handleOpenBulkModal('add')} 
+                        className="group flex-1 md:flex-none flex items-center gap-2 px-6 py-3 bg-purple-600 text-white hover:bg-purple-700 rounded-xl text-sm font-black shadow-lg shadow-purple-200 transition-all justify-center active:scale-95"
+                    >
+                        <Plus size={20} className="group-hover:rotate-90 transition-transform" />
+                        <span className="font-nepali">बल्क दाखिला (Bulk Entry)</span>
+                    </button>
                 </>
             )}
         </div>
@@ -878,122 +894,130 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button 
               onClick={() => setFilterType('')}
-              className={`flex items-center justify-between p-4 rounded-xl border transition-all ${filterType === '' ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200 scale-[1.02]' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}
+              className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${filterType === '' ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-100 scale-[1.02]' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:shadow-md'}`}
           >
               <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${filterType === '' ? 'bg-white/20' : 'bg-indigo-50 text-indigo-600'}`}><List size={20} /></div>
-                  <span className="font-bold font-nepali">सबै सामानहरू (All)</span>
+                  <div className={`p-2.5 rounded-xl ${filterType === '' ? 'bg-white/20' : 'bg-indigo-50 text-indigo-600'}`}><List size={22} /></div>
+                  <span className="font-black font-nepali text-lg">सबै सामान (All)</span>
               </div>
-              <span className={`text-lg font-black ${filterType === '' ? 'text-white' : 'text-slate-400'}`}>{inventoryItems.length}</span>
+              <span className={`text-2xl font-black ${filterType === '' ? 'text-white' : 'text-slate-400'}`}>{inventoryItems.length}</span>
           </button>
 
           <button 
               onClick={() => setFilterType('Expendable')}
-              className={`flex items-center justify-between p-4 rounded-xl border transition-all ${filterType === 'Expendable' ? 'bg-orange-500 text-white border-orange-500 shadow-lg shadow-orange-200 scale-[1.02]' : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300'}`}
+              className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${filterType === 'Expendable' ? 'bg-orange-500 text-white border-orange-500 shadow-xl shadow-orange-100 scale-[1.02]' : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:shadow-md'}`}
           >
               <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${filterType === 'Expendable' ? 'bg-white/20' : 'bg-orange-50 text-orange-600'}`}><Layers size={20} /></div>
-                  <span className="font-bold font-nepali">खर्च भएर जाने (Expendable)</span>
+                  <div className={`p-2.5 rounded-xl ${filterType === 'Expendable' ? 'bg-white/20' : 'bg-orange-50 text-orange-600'}`}><Layers size={22} /></div>
+                  <span className="font-black font-nepali text-lg">खर्च हुने (EXP)</span>
               </div>
-              <span className={`text-lg font-black ${filterType === 'Expendable' ? 'text-white' : 'text-slate-400'}`}>{expendableCount}</span>
+              <span className={`text-2xl font-black ${filterType === 'Expendable' ? 'text-white' : 'text-slate-400'}`}>{expendableCount}</span>
           </button>
 
           <button 
               onClick={() => setFilterType('Non-Expendable')}
-              className={`flex items-center justify-between p-4 rounded-xl border transition-all ${filterType === 'Non-Expendable' ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-200 scale-[1.02]' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}
+              className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${filterType === 'Non-Expendable' ? 'bg-blue-600 text-white border-blue-600 shadow-xl shadow-blue-100 scale-[1.02]' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:shadow-md'}`}
           >
               <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${filterType === 'Non-Expendable' ? 'bg-white/20' : 'bg-blue-50 text-blue-600'}`}><CheckSquare size={20} /></div>
-                  <span className="font-bold font-nepali">खर्च भएर नजाने (Fixed Assets)</span>
+                  <div className={`p-2.5 rounded-xl ${filterType === 'Non-Expendable' ? 'bg-white/20' : 'bg-blue-50 text-blue-600'}`}><CheckSquare size={22} /></div>
+                  <span className="font-black font-nepali text-lg">खर्च नहुने (FIX)</span>
               </div>
-              <span className={`text-lg font-black ${filterType === 'Non-Expendable' ? 'text-white' : 'text-slate-400'}`}>{nonExpendableCount}</span>
+              <span className={`text-2xl font-black ${filterType === 'Non-Expendable' ? 'text-white' : 'text-slate-400'}`}>{nonExpendableCount}</span>
           </button>
       </div>
 
-      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isSuperAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isSuperAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm`}>
           <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input type="text" placeholder="सामान, कोड खोज्नुहोस्..." className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type="text" placeholder="सामान, कोड खोज्नुहोस्..." className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none text-sm transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           {isSuperAdmin && (
-              <Select label="संस्था फिल्टर" options={orgOptions} value={filterOrg} onChange={e => setFilterOrg(e.target.value)} placeholder="Filter by Organization" icon={<Building2 size={16} />} />
+              <Select label="संस्था फिल्टर" options={orgOptions} value={filterOrg} onChange={e => setFilterOrg(e.target.value)} placeholder="Filter by Organization" icon={<Building2 size={16} />} className="!py-2.5" />
           )}
-          <Select label="स्टोर फिल्टर" options={[{id: 'all', value: '', label: 'All Stores'}, ...storeOptions]} value={filterStore} onChange={e => setFilterStore(e.target.value)} placeholder="Filter by Store" icon={<StoreIcon size={16} />} />
-          <Select label="वर्गीकरण फिल्टर" options={[{id: 'all', value: '', label: 'All Classes'}, ...itemClassificationOptions]} value={filterClass} onChange={e => setFilterClass(e.target.value)} placeholder="Filter by Class" icon={<Tag size={16} />} />
+          <Select label="स्टोर फिल्टर" options={[{id: 'all', value: '', label: 'All Stores'}, ...storeOptions]} value={filterStore} onChange={e => setFilterStore(e.target.value)} placeholder="Filter by Store" icon={<StoreIcon size={16} />} className="!py-2.5" />
+          <Select label="वर्गीकरण फिल्टर" options={[{id: 'all', value: '', label: 'All Classes'}, ...itemClassificationOptions]} value={filterClass} onChange={e => setFilterClass(e.target.value)} placeholder="Filter by Class" icon={<Tag size={16} />} className="!py-2.5" />
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center">
-              <h3 className="font-semibold text-slate-700 font-nepali flex items-center gap-2">
-                  <Package size={18} className="text-slate-400" />
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-lg">
+          <div className="px-8 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <h3 className="font-bold text-slate-700 font-nepali flex items-center gap-3 text-lg">
+                  <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-sm"><Package size={20} className="text-indigo-600" /></div>
                   {filterType === '' ? 'सबै मौज्दात सूची' : filterType === 'Expendable' ? 'खर्च हुने सामानको सूची' : 'खर्च नहुने सामानको सूची'}
               </h3>
-              <span className="text-xs font-medium bg-slate-200 text-slate-600 px-3 py-1 rounded-full">{filteredItems.length} Items Matching</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-black bg-indigo-100 text-indigo-700 px-4 py-1.5 rounded-full uppercase tracking-wider shadow-sm">{filteredItems.length} Items Found</span>
+              </div>
           </div>
           <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                  <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                  <thead className="bg-slate-50 text-slate-500 font-black border-b border-slate-200 uppercase tracking-widest text-[10px]">
                       <tr>
-                          <th className="px-4 py-3 w-12 text-center">SN</th>
-                          {isSuperAdmin && <th className="px-4 py-3 w-32">Sanstha (Org)</th>}
-                          <th className="px-4 py-3 min-w-[200px]">Item Name / Specification</th>
-                          <th className="px-4 py-3 w-24">जि.खा.पा.नं</th>
-                          <th className="px-4 py-3 w-32">Unique Code / Sanket</th>
-                          <th className="px-4 py-3 w-28">Store</th>
-                          <th className="px-4 py-3 w-28">Classification</th>
-                          <th className="px-4 py-3 w-20 text-center">Qty</th>
-                          <th className="px-4 py-3 w-28">Batch / Expiry</th>
-                          <th className="px-4 py-3 w-24 text-right">Rate</th>
-                          <th className="px-4 py-3 w-24 text-right">Total</th>
-                          <th className="px-4 py-3 text-center">Actions</th>
+                          <th className="px-6 py-4 w-12 text-center">SN</th>
+                          {isSuperAdmin && <th className="px-6 py-4 w-32">Sanstha (Org)</th>}
+                          <th className="px-6 py-4 min-w-[200px]">Item Name / Specification</th>
+                          <th className="px-6 py-4 w-24">जि.खा.पा.नं</th>
+                          <th className="px-6 py-4 w-32">Unique Code / Sanket</th>
+                          <th className="px-6 py-4 w-28">Store</th>
+                          <th className="px-6 py-4 w-28">Classification</th>
+                          <th className="px-6 py-4 w-20 text-center">Qty</th>
+                          <th className="px-6 py-4 w-28">Batch / Expiry</th>
+                          <th className="px-6 py-4 w-24 text-right">Rate</th>
+                          <th className="px-6 py-4 w-24 text-right">Total</th>
+                          <th className="px-6 py-4 text-center">Actions</th>
                       </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                       {filteredItems.length === 0 ? (
-                          <tr><td colSpan={isSuperAdmin ? 12 : 11} className="px-6 py-12 text-center text-slate-400 italic font-nepali text-base">माथि छानिएको प्रकारमा कुनै सामान भेटिएन। (No items found in this category.)</td></tr>
+                          <tr><td colSpan={isSuperAdmin ? 12 : 11} className="px-8 py-24 text-center text-slate-400 italic font-nepali text-lg"><div className="flex flex-col items-center gap-4"><Search size={64} className="opacity-10" /><p>कुनै सामान फेला परेन।</p></div></td></tr>
                       ) : (
                           filteredItems.map((item, index) => {
                               const storeName = storeOptions.find(s => s.value === item.storeId)?.label || 'Unknown';
                               return (
-                                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                      <td className="px-4 py-3 text-center text-slate-500">{index + 1}</td>
+                                  <tr key={item.id} className="hover:bg-slate-50/80 transition-all group">
+                                      <td className="px-6 py-4 text-center text-slate-400 font-bold">{index + 1}</td>
                                       {isSuperAdmin && (
-                                          <td className="px-4 py-3">
-                                              <div className="font-bold text-indigo-700 flex items-center gap-1">
-                                                  <Building2 size={12} className="text-indigo-400" />
+                                          <td className="px-6 py-4">
+                                              <div className="font-bold text-indigo-700 flex items-center gap-1.5">
+                                                  <Building2 size={14} className="text-indigo-400" />
                                                   <span className="truncate max-w-[120px]">{item.orgName || 'N/A'}</span>
                                               </div>
                                           </td>
                                       )}
-                                      <td className="px-4 py-3">
-                                          <div className="font-bold text-slate-800">{item.itemName}</div>
-                                          <div className="text-[10px] text-slate-500 italic truncate max-w-[200px]">{item.specification || '-'}</div>
+                                      <td className="px-6 py-4">
+                                          <div className="font-black text-slate-800 text-sm">{item.itemName}</div>
+                                          <div className="text-[10px] text-slate-400 italic truncate max-w-[200px] mt-0.5">{item.specification || '-'}</div>
                                       </td>
-                                      <td className="px-4 py-3 font-mono font-bold text-indigo-700">{item.ledgerPageNo || '-'}</td>
-                                      <td className="px-4 py-3 text-[10px] text-slate-500 font-mono">
-                                          <div>U: {item.uniqueCode || '-'}</div>
-                                          <div>S: {item.sanketNo || '-'}</div>
+                                      <td className="px-6 py-4 font-mono font-black text-indigo-600 bg-indigo-50/20">{item.ledgerPageNo || '-'}</td>
+                                      <td className="px-6 py-4 text-[10px] text-slate-500 font-mono space-y-0.5">
+                                          <div className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">U: {item.uniqueCode || '-'}</div>
+                                          <div className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">S: {item.sanketNo || '-'}</div>
                                       </td>
-                                      <td className="px-4 py-3 text-slate-600">{storeName}</td>
-                                      <td className="px-4 py-3">
-                                          <span className={`inline-flex px-1.5 py-0.5 rounded-[4px] text-[9px] font-bold border mb-1 ${item.itemType === 'Expendable' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                              {item.itemType === 'Expendable' ? 'EXP' : 'FIX'}
+                                      <td className="px-6 py-4">
+                                          <div className="flex items-center gap-1.5 text-slate-600 font-bold">
+                                              <StoreIcon size={12} className="text-slate-300" />
+                                              {storeName}
+                                          </div>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-black border tracking-wider mb-1 ${item.itemType === 'Expendable' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                              {item.itemType === 'Expendable' ? 'EXPENDABLE' : 'FIXED ASSET'}
                                           </span>
-                                          <div className="text-[10px] text-slate-500">{item.itemClassification}</div>
+                                          <div className="text-[10px] text-slate-400 font-medium">{item.itemClassification}</div>
                                       </td>
-                                      <td className="px-4 py-3 text-center font-bold text-slate-800 bg-slate-50/50">
-                                          {item.currentQuantity} <span className="text-[10px] font-normal text-slate-400">{item.unit}</span>
+                                      <td className="px-6 py-4 text-center font-black text-slate-900 bg-slate-50/50 text-sm">
+                                          {item.currentQuantity} <span className="text-[10px] font-bold text-slate-400 ml-0.5 uppercase">{item.unit}</span>
                                       </td>
-                                      <td className="px-4 py-3">
-                                          <div className="text-[10px] font-bold text-orange-600">{item.batchNo || '-'}</div>
-                                          <div className="text-[9px] text-slate-400 font-nepali">{item.expiryDateBs || '-'}</div>
+                                      <td className="px-6 py-4">
+                                          {item.batchNo && <div className="text-[10px] font-black text-orange-600 uppercase tracking-tighter">B: {item.batchNo}</div>}
+                                          {item.expiryDateBs && <div className="text-[10px] text-red-500 font-black font-nepali mt-0.5">{item.expiryDateBs}</div>}
+                                          {!item.batchNo && !item.expiryDateBs && <span className="text-slate-300">-</span>}
                                       </td>
-                                      <td className="px-4 py-3 text-right text-slate-600">{item.rate?.toFixed(2) || '-'}</td>
-                                      <td className="px-4 py-3 text-right font-bold text-slate-800">{item.totalAmount?.toFixed(2) || '-'}</td>
-                                      <td className="px-4 py-3 text-center">
-                                          <div className="flex items-center justify-center gap-1">
-                                              <button onClick={() => handleViewClick(item)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-full transition-all" title="Full Details"><Info size={16}/></button>
-                                              {!isSuperAdmin && <button onClick={() => handleEditClick(item)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-full transition-all" title="Edit"><Edit size={16} /></button>}
+                                      <td className="px-6 py-4 text-right text-slate-500 font-bold">{item.rate?.toFixed(2) || '-'}</td>
+                                      <td className="px-6 py-4 text-right font-black text-slate-800 text-sm border-l border-slate-50">{item.totalAmount?.toFixed(2) || '-'}</td>
+                                      <td className="px-6 py-4 text-center">
+                                          <div className="flex items-center justify-center gap-2">
+                                              <button onClick={() => handleViewClick(item)} className="text-slate-400 hover:text-indigo-600 p-2 hover:bg-indigo-50 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="Full Details"><Info size={16}/></button>
+                                              {!isSuperAdmin && <button onClick={() => handleEditClick(item)} className="text-slate-400 hover:text-indigo-600 p-2 hover:bg-indigo-50 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="Edit"><Edit size={16} /></button>}
                                           </div>
                                       </td>
                                   </tr>
