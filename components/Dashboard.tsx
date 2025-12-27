@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Syringe, Activity, 
   ClipboardList, FileSpreadsheet, FilePlus, ShoppingCart, FileOutput, 
   BookOpen, Book, Archive, RotateCcw, Wrench, Scroll, BarChart3,
-  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart
+  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck
 } from 'lucide-react';
 import { APP_NAME, ORG_NAME, FISCAL_YEARS } from '../constants';
 import { DashboardProps, PurchaseOrderEntry, InventoryItem } from '../types'; 
@@ -117,20 +117,41 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const todayStr = today.format('YYYY-MM-DD'); 
     const todayAd = new Date().toISOString().split('T')[0];
     
-    const todayRabies = rabiesPatients.filter(p => p.regDateBs === todayStr).length;
-    const todayScheduled = rabiesPatients.filter(p => p.schedule.some(dose => dose.date === todayAd)).length;
-    const todayCompleted = rabiesPatients.filter(p => p.schedule.some(dose => dose.date === todayAd && dose.status === 'Given')).length;
+    // Total Registered Today (Day 0)
+    const todayRabiesReg = rabiesPatients.filter(p => p.regDateBs === todayStr).length;
     
+    // Scheduled vs Visited Calculation
+    let scheduledToday = 0;
+    let visitedToday = 0;
     let totalFutureDosesNeeded = 0;
+
     rabiesPatients.forEach(patient => {
-        patient.schedule.forEach(dose => {
-            if (dose.status === 'Pending') totalFutureDosesNeeded++;
+        (patient.schedule || []).forEach(dose => {
+            if (dose.date === todayAd) {
+                scheduledToday++;
+                if (dose.status === 'Given') {
+                    visitedToday++;
+                }
+            }
+            if (dose.status === 'Pending') {
+                totalFutureDosesNeeded++;
+            }
         });
     });
+    
+    // Vials calculation logic:
+    // For 1ml vial: 1 vial can serve ~5 ID doses (0.2ml each)
+    // For 0.5ml vial: 1 vial can serve ~2 doses (with safety margin)
+    const vials1mlNeeded = Math.ceil(totalFutureDosesNeeded / 5);
+    const vials05mlNeeded = Math.ceil(totalFutureDosesNeeded / 2);
 
     return { 
-      todayRabies, 
-      totalFutureDosesNeeded: totalFutureDosesNeeded, 
+      todayRabiesReg, 
+      scheduledToday,
+      visitedToday,
+      totalFutureDosesNeeded,
+      vials1mlNeeded,
+      vials05mlNeeded,
       totalInventory: inventoryItems.length, 
       pendingMagForms: magForms.filter(f => f.status === 'Pending').length, 
       pendingStockReq: stockEntryRequests.filter(r => r.status === 'Pending').length 
@@ -192,13 +213,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div><h2 className="text-xl font-bold text-slate-800 font-nepali">मुख्य ड्यासबोर्ड</h2><p className="text-xs text-slate-500 font-medium font-nepali">हालको अवस्था र तथ्याङ्क</p></div>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Stat Card 1: Today Rabies */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                {/* Stat Card 1: Today Rabies Registration */}
                 <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-all group">
                     <div className="flex justify-between items-start">
                         <div>
-                            <h3 className="text-2xl font-black text-slate-800">{stats.todayRabies}</h3>
-                            <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">आजको रेबिज दर्ता</p>
+                            <h3 className="text-2xl font-black text-slate-800">{stats.todayRabiesReg}</h3>
+                            <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">आजको नयाँ दर्ता</p>
                         </div>
                         <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                             <Syringe size={20} />
@@ -206,20 +227,52 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                 </div>
 
-                {/* Stat Card 2: Future Doses */}
-                <div className="bg-white p-6 rounded-2xl border border-rose-100 shadow-sm hover:shadow-md transition-all group">
+                {/* Stat Card 2: Today's Vaccination Attendance */}
+                <div className="bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-all group">
                     <div className="flex justify-between items-start">
                         <div>
-                            <h3 className="text-2xl font-black text-slate-800">{stats.totalFutureDosesNeeded}</h3>
-                            <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">बाँकी खोप डोजहरू</p>
+                            <div className="flex items-baseline gap-1">
+                                <h3 className="text-2xl font-black text-emerald-600">{stats.visitedToday}</h3>
+                                <span className="text-slate-400 font-bold text-sm">/ {stats.scheduledToday}</span>
+                            </div>
+                            <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">आजको खोप हाजिरी</p>
+                            <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                                <div 
+                                    className="bg-emerald-500 h-full transition-all duration-1000" 
+                                    style={{ width: `${stats.scheduledToday > 0 ? (stats.visitedToday / stats.scheduledToday) * 100 : 0}%` }}
+                                ></div>
+                            </div>
                         </div>
-                        <div className="bg-rose-50 p-2.5 rounded-xl text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-colors">
-                            <Clock size={20} />
+                        <div className="bg-emerald-50 p-2.5 rounded-xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                            <CalendarCheck size={20} />
                         </div>
                     </div>
                 </div>
 
-                {/* Stat Card 3: Pending Mag Form */}
+                {/* Stat Card 3: Vials Needed (Split 1ml and 0.5ml) */}
+                <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                            <p className="text-[10px] font-black text-slate-400 font-nepali uppercase tracking-wider mb-2">आवश्यक खोप भायल</p>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between border-b border-blue-50 pb-1">
+                                    <span className="text-xs font-bold text-slate-600">1 ml Vial:</span>
+                                    <span className="text-lg font-black text-blue-600">{stats.vials1mlNeeded}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-slate-600">0.5 ml Vial:</span>
+                                    <span className="text-lg font-black text-blue-600">{stats.vials05mlNeeded}</span>
+                                </div>
+                            </div>
+                            <p className="text-[9px] text-slate-400 font-medium italic mt-2">(Total {stats.totalFutureDosesNeeded} Pending)</p>
+                        </div>
+                        <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors ml-2">
+                            <Pill size={20} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Stat Card 4: Pending Mag Form */}
                 <div className="bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-all group">
                     <div className="flex justify-between items-start">
                         <div>
@@ -232,12 +285,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                 </div>
 
-                {/* Stat Card 4: Pending Stock Req */}
+                {/* Stat Card 5: Pending Stock Req */}
                 <div className="bg-white p-6 rounded-2xl border border-teal-100 shadow-sm hover:shadow-md transition-all group">
                     <div className="flex justify-between items-start">
                         <div>
                             <h3 className="text-2xl font-black text-slate-800">{stats.pendingStockReq}</h3>
-                            <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">स्टक दाखिला अनुरोध</p>
+                            <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">दाखिला अनुरोध</p>
                         </div>
                         <div className="bg-teal-50 p-2.5 rounded-xl text-teal-600 group-hover:bg-teal-600 group-hover:text-white transition-colors">
                             <Warehouse size={20} />
