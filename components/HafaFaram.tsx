@@ -75,7 +75,6 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
         itemData: item
     })), [inventoryItems]);
 
-    // Robust filtering for current user's organization
     const outgoingEntries = useMemo(() => {
         const myOrg = currentUser.organizationName.trim().toLowerCase();
         return existingEntries.filter(e => e.sourceOrg?.trim().toLowerCase() === myOrg);
@@ -88,10 +87,8 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
 
     const actionableEntries = useMemo(() => {
         if (activeTab === 'outgoing') {
-            // For sender: Forms that are Pending need to be finalizing by Storekeeper or Approved by Admin
             return outgoingEntries.filter(e => e.status === 'Pending').sort((a, b) => b.id.localeCompare(a.id));
         } else {
-            // For recipient: Forms Approved by sender but not yet acknowledged by recipient
             return incomingEntries.filter(e => e.status === 'Approved' && !e.recipientApprovedBy?.name).sort((a, b) => b.id.localeCompare(a.id));
         }
     }, [activeTab, outgoingEntries, incomingEntries]);
@@ -122,7 +119,7 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
     }, [isEditing, editingId, generateFormNo, activeTab]);
 
     const handleAddItem = () => {
-        if (items.length < 15) {
+        if (items.length < 50) {
             setItems([...items, { id: Date.now(), codeNo: '', name: '', specification: '', model: '', idNo: '', unit: '', quantity: 1, rate: 0, totalAmount: 0, startDate: '', condition: 'चालू', remarks: '' }]);
         }
     };
@@ -203,8 +200,8 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
             status: statusToSet,
             preparedBy: updatedPreparedBy,
             approvedBy: updatedApprovedBy,
-            recipientPreparedBy: updatedRecipientPrepared,
-            recipientApprovedBy: updatedRecipientApproved
+            recipientPreparedBy: updatedRecipientPrepared || { name: '', designation: '', date: '' },
+            recipientApprovedBy: updatedRecipientApproved || { name: '', designation: '', date: '' }
         };
 
         try {
@@ -213,17 +210,6 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
             setTimeout(() => handleReset(), 2000);
         } finally {
             setIsSubmitting(false);
-        }
-    };
-
-    const handleDeleteClick = (id: string) => {
-        if (window.confirm("के तपाईं यो हस्तान्तरण फारम सधैंको लागि मेटाउन चाहनुहुन्छ? यो कार्य फिर्ता गर्न सकिने छैन।")) {
-            if (onDelete) {
-                onDelete(id);
-                setSuccessMessage("फारम सफलतापूर्वक हटाइयो।");
-                setTimeout(() => setSuccessMessage(null), 2000);
-                if (editingId) handleReset();
-            }
         }
     };
 
@@ -250,21 +236,37 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
         setEditingId(entry.id);
         setIsEditing(true);
         setIsViewOnly(viewOnly);
-        
-        // If it's auto-generated and storekeeper is loading it for first time
         const initialFormNo = (entry.formNo === 'TBD' && activeTab === 'outgoing') ? generateFormNo() : entry.formNo;
-
-        setFormDetails({
-            ...entry,
-            formNo: initialFormNo
-        });
+        setFormDetails({ ...entry, formNo: initialFormNo });
         setItems(entry.items);
         setValidationError(null);
         setSuccessMessage(null);
         setIsSubmitting(false);
     };
 
-    const totalVal = items.reduce((sum, i) => sum + i.totalAmount, 0);
+    const inputClass = "border-b border-dotted border-slate-800 outline-none bg-transparent px-1 min-w-[50px]";
+
+    const headerDetails = (activeTab === 'incoming' && formDetails.sourceOrgDetails) ? {
+        orgName: formDetails.sourceOrgDetails.name,
+        subTitle: formDetails.sourceOrgDetails.subTitle || '',
+        subTitle2: (formDetails as any).sourceOrgDetails?.subTitle2 || '',
+        subTitle3: (formDetails as any).sourceOrgDetails?.subTitle3 || '',
+        address: formDetails.sourceOrgDetails.address || '',
+        phone: (formDetails as any).sourceOrgDetails?.phone || '',
+        email: (formDetails as any).sourceOrgDetails?.email || '',
+        website: (formDetails as any).sourceOrgDetails?.website || '',
+        panNo: (formDetails as any).sourceOrgDetails?.panNo || ''
+    } : {
+        orgName: generalSettings.orgNameNepali,
+        subTitle: generalSettings.subTitleNepali,
+        subTitle2: generalSettings.subTitleNepali2 || '',
+        subTitle3: generalSettings.subTitleNepali3 || '',
+        address: generalSettings.address,
+        phone: generalSettings.phone,
+        email: generalSettings.email,
+        website: generalSettings.website,
+        panNo: generalSettings.panNo
+    };
 
     if (!isEditing) {
         return (
@@ -278,90 +280,30 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                     </div>
                     <div className="flex gap-2">
                         <div className="flex bg-slate-100 p-1 rounded-xl">
-                            <button 
-                                onClick={() => setActiveTab('outgoing')} 
-                                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'outgoing' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500'}`}
-                            >
-                                <UploadCloud size={14} /> पठाएको (Outgoing)
-                                {outgoingEntries.filter(e => e.status === 'Pending').length > 0 && (
-                                    <span className="h-2 w-2 bg-indigo-500 rounded-full animate-pulse ml-1"></span>
-                                )}
-                            </button>
-                            <button 
-                                onClick={() => setActiveTab('incoming')} 
-                                className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'incoming' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}`}
-                            >
-                                <DownloadCloud size={14} /> प्राप्त भएको (Received)
-                                {incomingEntries.filter(e => e.status === 'Approved' && !e.recipientApprovedBy?.name).length > 0 && (
-                                    <span className="h-2 w-2 bg-red-500 rounded-full animate-pulse ml-1"></span>
-                                )}
-                            </button>
+                            <button onClick={() => setActiveTab('outgoing')} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'outgoing' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500'}`}><UploadCloud size={14} /> पठाएको (Outgoing)</button>
+                            <button onClick={() => setActiveTab('incoming')} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'incoming' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}`}><DownloadCloud size={14} /> प्राप्त भएको (Received)</button>
                         </div>
-                        {activeTab === 'outgoing' && (
-                            <button onClick={() => setIsEditing(true)} className="bg-primary-600 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 shadow-lg hover:bg-primary-700 transition-all font-bold font-nepali">
-                                <Plus size={20} /> नयाँ हस्तान्तरण
-                            </button>
-                        )}
+                        {activeTab === 'outgoing' && <button onClick={() => setIsEditing(true)} className="bg-primary-600 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 shadow-lg hover:bg-primary-700 transition-all font-bold font-nepali"><Plus size={20} /> नयाँ हस्तान्तरण</button>}
                     </div>
                 </div>
-
-                {successMessage && (
-                    <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl shadow-sm flex items-center gap-3 animate-in slide-in-from-top-2 no-print">
-                        <CheckCircle2 className="text-green-500" />
-                        <p className="text-green-800 font-bold">{successMessage}</p>
-                    </div>
-                )}
-
+                
                 {actionableEntries.length > 0 && (
                     <div className={`bg-white rounded-xl border shadow-sm overflow-hidden mb-6 ${activeTab === 'outgoing' ? 'border-orange-200' : 'border-emerald-200'}`}>
                         <div className={`px-6 py-3 border-b flex justify-between items-center ${activeTab === 'outgoing' ? 'bg-orange-50 text-orange-800' : 'bg-emerald-50 text-emerald-800'}`}>
-                            <div className="flex items-center gap-2">
-                                <Clock size={18} />
-                                <h3 className="font-bold font-nepali">{activeTab === 'outgoing' ? 'प्रक्रिया गर्न बाँकी (Outgoing Actionable)' : 'बुझिलिन बाँकी (Awaiting Reception)'}</h3>
-                            </div>
+                            <div className="flex items-center gap-2"><Clock size={18} /><h3 className="font-bold font-nepali">{activeTab === 'outgoing' ? 'प्रक्रिया गर्न बाँकी' : 'बुझिलिन बाँकी'}</h3></div>
                             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white/50">{actionableEntries.length} Forms</span>
                         </div>
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-50 text-slate-600 font-medium">
-                                <tr>
-                                    <th className="px-6 py-3">फारम नं</th>
-                                    <th className="px-6 py-3">मिति</th>
-                                    <th className="px-6 py-3">{activeTab === 'outgoing' ? 'प्राप्त गर्ने कार्यालय' : 'पठाउने कार्यालय'}</th>
-                                    <th className="px-6 py-3 text-right">Action</th>
-                                </tr>
+                                <tr><th className="px-6 py-3">फारम नं</th><th className="px-6 py-3">मिति</th><th className="px-6 py-3">{activeTab === 'outgoing' ? 'प्राप्त गर्ने कार्यालय' : 'पठाउने कार्यालय'}</th><th className="px-6 py-3 text-right">Action</th></tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {actionableEntries.map(e => (
                                     <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="font-mono font-bold text-slate-700">#{e.formNo === 'TBD' ? 'PENDING' : e.formNo}</div>
-                                            {e.id.startsWith('HF-AUTO') && (
-                                                <span className="flex items-center gap-1 text-[9px] font-bold text-indigo-600 uppercase mt-1">
-                                                    <Sparkles size={10} /> Auto-Generated
-                                                </span>
-                                            )}
-                                        </td>
+                                        <td className="px-6 py-4 font-mono font-bold text-slate-700">#{e.formNo === 'TBD' ? 'PENDING' : e.formNo}</td>
                                         <td className="px-6 py-4 font-nepali">{e.date || 'सेट गरिएको छैन'}</td>
-                                        <td className="px-6 py-4">
-                                            {activeTab === 'outgoing' ? e.recipientOrg : (
-                                                <div className="flex items-center gap-1.5 font-bold text-emerald-700">
-                                                    <Building2 size={14} />
-                                                    {e.sourceOrg}
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex justify-end gap-2">
-                                                {activeTab === 'outgoing' && (
-                                                    <button onClick={() => handleDeleteClick(e.id)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg transition-all" title="मेटाउनुहोस् (Delete)">
-                                                        <Trash2 size={18} />
-                                                    </button>
-                                                )}
-                                                <button onClick={() => handleLoadEntry(e, false)} className="text-primary-600 font-bold hover:underline bg-primary-50 px-3 py-1.5 rounded-lg flex items-center gap-2">
-                                                    {activeTab === 'outgoing' ? (isStoreKeeper ? 'Prepare' : 'Review/Approve') : <><DownloadCloud size={14}/> बुझिलिनुहोस्</>}
-                                                </button>
-                                            </div>
-                                        </td>
+                                        <td className="px-6 py-4">{activeTab === 'outgoing' ? e.recipientOrg : e.sourceOrg}</td>
+                                        <td className="px-6 py-4 text-right"><button onClick={() => handleLoadEntry(e, false)} className="text-primary-600 font-bold hover:underline bg-primary-50 px-3 py-1.5 rounded-lg">Process</button></td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -370,71 +312,31 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                 )}
 
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 text-slate-700 font-bold font-nepali flex items-center gap-2"><FileText size={18} /> {activeTab === 'outgoing' ? 'पठाएको इतिहास' : 'प्राप्त इतिहास (All Received Forms)'}</div>
+                    <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 text-slate-700 font-bold font-nepali flex items-center gap-2"><FileText size={18} /> हस्तान्तरण इतिहास (Transfer History)</div>
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 text-slate-500 font-medium">
-                            <tr>
-                                <th className="px-6 py-3">फारम नं</th>
-                                <th className="px-6 py-3">मिति</th>
-                                <th className="px-6 py-3">{activeTab === 'outgoing' ? 'प्राप्त गर्ने कार्यालय' : 'पठाउने कार्यालय'}</th>
-                                <th className="px-6 py-3">अवस्था</th>
-                                <th className="px-6 py-3 text-right">Action</th>
-                            </tr>
+                            <tr><th className="px-6 py-3">फारम नं</th><th className="px-6 py-3">विवरण</th><th className="px-6 py-3">अवस्था</th><th className="px-6 py-3 text-right">Action</th></tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {historyEntries.length === 0 ? (
-                                <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-400 italic">कुनै अभिलेख भेटिएन।</td></tr>
-                            ) : (
-                                historyEntries.map(e => (
-                                    <tr key={e.id} className="hover:bg-slate-50">
-                                        <td className="px-6 py-4 font-mono font-bold text-slate-700">#{e.formNo}</td>
-                                        <td className="px-6 py-4 font-nepali">{e.date}</td>
-                                        <td className="px-6 py-4">
-                                            {activeTab === 'outgoing' ? e.recipientOrg : (
-                                                <div className="flex items-center gap-1.5 font-bold text-slate-700">
-                                                    <Building2 size={14} className="text-slate-400" />
-                                                    {e.sourceOrg}
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {activeTab === 'outgoing' ? (
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                                    e.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : 
-                                                    e.status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200' :
-                                                    'bg-orange-50 text-orange-700 border-orange-200'}`}>{e.status}</span>
-                                            ) : (
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                                    e.recipientApprovedBy?.name ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                                                    'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                                    {e.recipientApprovedBy?.name ? 'बुझिलिएको (Received)' : 'प्राप्त भएको (Sent by Source)'}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button onClick={() => handleLoadEntry(e, true)} className="p-2 text-slate-400 hover:text-primary-600" title="Preview"><Eye size={18} /></button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
+                            {historyEntries.map(e => (
+                                <tr key={e.id} className="hover:bg-slate-50">
+                                    <td className="px-6 py-4 font-mono font-bold text-slate-700">#{e.formNo === 'TBD' ? 'PENDING' : e.formNo}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-xs font-bold">{activeTab === 'outgoing' ? `To: ${e.recipientOrg}` : `From: ${e.sourceOrg}`}</div>
+                                        <div className="text-[10px] text-slate-400 font-nepali">{e.date} | Items: {e.items.length}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${e.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>{e.status}</span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right"><button onClick={() => handleLoadEntry(e, true)} className="p-2 text-slate-400 hover:text-primary-600"><Eye size={18} /></button></td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
             </div>
         );
     }
-
-    const inputClass = "border-b border-dotted border-slate-800 outline-none bg-transparent px-1 min-w-[50px]";
-
-    const headerDetails = (activeTab === 'incoming' && formDetails.sourceOrgDetails) ? {
-        orgName: formDetails.sourceOrgDetails.name,
-        subTitle: formDetails.sourceOrgDetails.subTitle || '',
-        address: formDetails.sourceOrgDetails.address || ''
-    } : {
-        orgName: generalSettings.orgNameNepali,
-        subTitle: generalSettings.subTitleNepali,
-        address: generalSettings.address
-    };
 
     return (
         <div className="space-y-6">
@@ -452,59 +354,30 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm no-print">
                 <div className="flex items-center gap-3">
                     <button onClick={handleReset} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"><ArrowLeft size={20} /></button>
-                    <h2 className="font-bold text-slate-700 font-nepali text-lg">
-                        {isViewOnly ? 'हस्तान्तरण फारम प्रिभ्यु' : activeTab === 'incoming' ? 'हस्तान्तरण बुझिलिनुहोस्' : 'हस्तान्तरण फारम भर्नुहोस्'}
-                    </h2>
+                    <h2 className="font-bold text-slate-700 font-nepali text-lg">{isViewOnly ? 'हस्तान्तरण फारम प्रिभ्यु' : 'हस्तान्तरण फारम'}</h2>
                 </div>
                 <div className="flex gap-2">
                     {!isViewOnly && (
-                        <>
-                            {activeTab === 'outgoing' && formDetails.status === 'Pending' && editingId && (
-                                <button onClick={() => handleDeleteClick(editingId)} className="bg-red-50 text-red-600 px-4 py-2 rounded-lg font-bold border border-red-200 hover:bg-red-100 flex items-center gap-2">
-                                    <Trash2 size={18} /> मेटाउनुहोस्
-                                </button>
-                            )}
-                            {activeTab === 'outgoing' ? (
-                                <>
-                                    {isApprover && formDetails.status === 'Pending' && editingId && (
-                                        <button onClick={() => handleSave('Approved')} disabled={isSubmitting} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold shadow-sm hover:bg-green-700 flex items-center gap-2 disabled:opacity-70">
-                                            {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
-                                            {isSubmitting ? 'प्रक्रियामा...' : 'स्वीकृत गर्नुहोस्'}
-                                        </button>
-                                    )}
-                                    {(isStoreKeeper || !editingId) && (
-                                        <button onClick={() => handleSave('Pending')} disabled={isSubmitting} className="bg-primary-600 text-white px-6 py-2 rounded-lg font-bold shadow-sm hover:bg-primary-700 flex items-center gap-2 disabled:opacity-70">
-                                            {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-                                            {isSubmitting ? 'पठाउँदै...' : 'सुरक्षित गरि पठाउनुहोस्'}
-                                        </button>
-                                    )}
-                                </>
-                            ) : (
-                                <button onClick={() => handleSave('Approved')} disabled={isSubmitting} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold shadow-sm hover:bg-emerald-700 flex items-center gap-2 disabled:opacity-70">
-                                    {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                                    {isSubmitting ? 'बचत हुँदै...' : 'बुझिलिएको प्रमाणित गर्नुहोस्'}
-                                </button>
-                            )}
-                        </>
+                        <button onClick={() => handleSave(isApprover ? 'Approved' : 'Pending')} disabled={isSubmitting} className="bg-primary-600 text-white px-6 py-2 rounded-lg font-bold shadow-sm hover:bg-primary-700 flex items-center gap-2">
+                            {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                            सुरक्षित गर्नुहोस्
+                        </button>
                     )}
                     <button onClick={() => window.print()} className="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold"><Printer size={18} className="inline mr-2" /> प्रिन्ट</button>
                 </div>
             </div>
 
-            {validationError && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl flex items-start gap-3 no-print">
-                    <AlertCircle className="text-red-500 mt-1" />
-                    <p className="text-red-800 font-bold">{validationError}</p>
+            {successMessage && (
+                <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl shadow-sm flex items-center gap-3 animate-in slide-in-from-top-2 no-print">
+                    <CheckCircle2 className="text-green-600" size={24} />
+                    <p className="text-green-800 font-bold font-nepali">{successMessage}</p>
                 </div>
             )}
 
-            {successMessage && (
-                <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-xl shadow-sm flex items-center gap-3 animate-in slide-in-from-top-2 no-print">
-                    <div className="text-green-500"><CheckCircle2 size={24} /></div>
-                    <div className="flex-1">
-                        <h3 className="text-green-800 font-bold text-lg font-nepali">सफल भयो (Success)</h3>
-                        <p className="text-green-700 text-sm font-nepali font-bold">{successMessage}</p>
-                    </div>
+            {validationError && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl shadow-sm flex items-center gap-3 animate-in slide-in-from-top-2 no-print">
+                    <AlertCircle className="text-red-600" size={24} />
+                    <p className="text-red-800 font-bold font-nepali">{validationError}</p>
                 </div>
             )}
 
@@ -519,8 +392,14 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                         <div className="flex-1 text-center">
                             <h1 className="text-lg font-bold">{headerDetails.orgName}</h1>
                             <h2 className="text-base font-bold">{headerDetails.subTitle}</h2>
+                            {headerDetails.subTitle2 && <h3 className="text-sm font-bold">{headerDetails.subTitle2}</h3>}
+                            {headerDetails.subTitle3 && <h3 className="text-base font-bold">{headerDetails.subTitle3}</h3>}
                             <div className="text-[10px] mt-2 space-x-1 font-medium text-slate-600">
-                                <span>{headerDetails.address}</span>
+                                {headerDetails.address && <span>{headerDetails.address}</span>}
+                                {headerDetails.phone && <span> | फोन नं: {headerDetails.phone}</span>}
+                                {headerDetails.email && <span> | ईमेल: {headerDetails.email}</span>}
+                                {headerDetails.website && <span> | वेबसाइट: {headerDetails.website}</span>}
+                                {headerDetails.panNo && <span> | पान/भ्याट नं: {headerDetails.panNo}</span>}
                             </div>
                         </div>
                         <div className="w-24"></div> 
@@ -551,19 +430,7 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                             </div>
                             <div className="flex gap-2 items-center">
                                 <span className="font-bold text-xs">प्राप्त गर्ने कार्यालयको नाम:</span>
-                                {activeTab === 'outgoing' && !isViewOnly ? (
-                                    <div className="flex-1">
-                                        <Select 
-                                            options={users.filter(u => u.role === 'ADMIN').map(u => ({ id: u.id, value: u.organizationName, label: u.organizationName }))} 
-                                            value={formDetails.recipientOrg} 
-                                            onChange={e => setFormDetails({...formDetails, recipientOrg: e.target.value})}
-                                            label=""
-                                            className="!py-0 !h-6 !text-xs !font-bold"
-                                        />
-                                    </div>
-                                ) : (
-                                    <input value={formDetails.recipientOrg} readOnly className={`${inputClass} flex-1 font-bold text-primary-700 text-xs`} />
-                                )}
+                                <input value={formDetails.recipientOrg} onChange={e => setFormDetails({...formDetails, recipientOrg: e.target.value})} disabled={isViewOnly || activeTab === 'incoming'} className={`${inputClass} flex-1 font-bold text-primary-700 text-xs`} />
                             </div>
                         </div>
                         <div className="col-span-4 text-right space-y-2">
@@ -611,7 +478,7 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                             <th className="border border-slate-900 p-1 w-14" rowSpan={2}>दर</th>
                             <th className="border border-slate-900 p-1 w-16" rowSpan={2}>जम्मा मूल्य</th>
                             <th className="border border-slate-900 p-1 w-20" rowSpan={2}>भौतिक अवस्था</th>
-                            <th className="border border-slate-900 p-1 no-print" rowSpan={2}></th>
+                            {!isViewOnly && activeTab === 'outgoing' && <th className="border border-slate-900 p-1 no-print w-10" rowSpan={2}>कार्य</th>}
                         </tr>
                         <tr className="bg-slate-50 font-bold">
                             <th className="border border-slate-900 p-1 w-14">सङ्केत नं.</th>
@@ -625,40 +492,54 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                         {items.map((item, idx) => (
                             <tr key={item.id}>
                                 <td className="border border-slate-900 p-1">{idx + 1}</td>
-                                <td className="border border-slate-900 p-1 font-mono">{item.codeNo}</td>
+                                <td className="border border-slate-900 p-1 font-mono">
+                                    <input value={item.codeNo} onChange={e => updateItem(item.id, 'codeNo', e.target.value)} disabled={isViewOnly || activeTab === 'incoming'} className="w-full text-center outline-none bg-transparent" />
+                                </td>
                                 <td className="border border-slate-900 p-0 text-left">
                                     {!isViewOnly && activeTab === 'outgoing' ? (
                                         <SearchableSelect options={itemOptions} value={item.name} onChange={v => updateItem(item.id, 'name', v)} onSelect={opt => handleItemSelect(item.id, opt)} className="!border-none !bg-transparent !p-1 !text-[9px]" />
                                     ) : <div className="px-1 font-bold">{item.name}</div>}
                                 </td>
-                                <td className="border border-slate-900 p-1">{item.specification}</td>
-                                <td className="border border-slate-900 p-1">{item.model}</td>
-                                <td className="border border-slate-900 p-1">{item.idNo}</td>
-                                <td className="border border-slate-900 p-1">{item.unit}</td>
-                                <td className="border border-slate-900 p-1 font-bold">{item.quantity}</td>
-                                <td className="border border-slate-900 p-1 text-right">{item.rate ? item.rate.toFixed(2) : '-'}</td>
-                                <td className="border border-slate-900 p-1 text-right font-bold bg-slate-50">{item.totalAmount.toFixed(2)}</td>
-                                <td className="border border-slate-900 p-1">{item.condition}</td>
-                                <td className="border border-slate-900 p-1 no-print">
-                                    {!isViewOnly && activeTab === 'outgoing' && <button onClick={() => handleRemoveItem(item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={12}/></button>}
+                                <td className="border border-slate-900 p-1">
+                                    <input value={item.specification} onChange={e => updateItem(item.id, 'specification', e.target.value)} disabled={isViewOnly || activeTab === 'incoming'} className="w-full text-left outline-none bg-transparent px-1" />
                                 </td>
+                                <td className="border border-slate-900 p-1">
+                                    <input value={item.model} onChange={e => updateItem(item.id, 'model', e.target.value)} disabled={isViewOnly || activeTab === 'incoming'} className="w-full text-center outline-none bg-transparent px-1" />
+                                </td>
+                                <td className="border border-slate-900 p-1">
+                                    <input value={item.idNo} onChange={e => updateItem(item.id, 'idNo', e.target.value)} disabled={isViewOnly || activeTab === 'incoming'} className="w-full text-center outline-none bg-transparent px-1" />
+                                </td>
+                                <td className="border border-slate-900 p-1">
+                                    <input value={item.unit} onChange={e => updateItem(item.id, 'unit', e.target.value)} disabled={isViewOnly || activeTab === 'incoming'} className="w-full text-center outline-none bg-transparent px-1" />
+                                </td>
+                                <td className="border border-slate-900 p-1 font-bold">
+                                    <input type="number" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', e.target.value)} disabled={isViewOnly || activeTab === 'incoming'} className="w-full text-center outline-none bg-transparent px-1" />
+                                </td>
+                                <td className="border border-slate-900 p-1 text-right">
+                                    <input type="number" value={item.rate} onChange={e => updateItem(item.id, 'rate', e.target.value)} disabled={isViewOnly || activeTab === 'incoming'} className="w-full text-right outline-none bg-transparent px-1" />
+                                </td>
+                                <td className="border border-slate-900 p-1 text-right font-bold bg-slate-50">{item.totalAmount.toFixed(2)}</td>
+                                <td className="border border-slate-900 p-1">
+                                    <input value={item.condition} onChange={e => updateItem(item.id, 'condition', e.target.value)} disabled={isViewOnly || activeTab === 'incoming'} className="w-full text-center outline-none bg-transparent px-1" />
+                                </td>
+                                {!isViewOnly && activeTab === 'outgoing' && (
+                                    <td className="border border-slate-900 p-1 no-print">
+                                        <button onClick={() => handleRemoveItem(item.id)} className="text-red-500 hover:text-red-700 transition-colors">
+                                            <Trash2 size={12}/>
+                                        </button>
+                                    </td>
+                                )}
                             </tr>
                         ))}
-                        <tr className="bg-slate-50 font-bold">
-                            <td colSpan={9} className="border border-slate-900 p-1 text-right px-4">जम्मा रकम</td>
-                            <td className="border border-slate-900 p-1 text-right">{totalVal.toFixed(2)}</td>
-                            <td className="border border-slate-900 p-1"></td>
-                            <td className="border border-slate-900 p-1 no-print"></td>
-                        </tr>
                     </tbody>
                 </table>
 
                 {!isViewOnly && activeTab === 'outgoing' && (
-                    <button onClick={handleAddItem} className="mt-2 no-print flex items-center gap-1 text-[10px] font-bold text-primary-600 bg-primary-50 px-2 py-1 rounded border border-dashed border-primary-200">
+                    <button onClick={handleAddItem} className="mt-2 no-print text-[10px] font-bold text-primary-600 bg-primary-50 px-2 py-1 rounded border border-dashed border-primary-200 hover:bg-primary-100 flex items-center gap-1 transition-all">
                         <Plus size={12} /> थप्नुहोस् (Add Row)
                     </button>
                 )}
-
+                
                 <div className="grid grid-cols-2 mt-8 gap-6 text-[9px]">
                     <div className="border border-slate-400 p-3 relative rounded bg-slate-50/50">
                         <p className="font-bold mb-3">हस्तान्तरण गर्ने कार्यालयले भर्ने (From):</p>
@@ -677,21 +558,20 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                             </div>
                         </div>
                     </div>
-
-                    <div className="border border-slate-400 p-3 relative rounded">
-                        <p className="font-bold mb-3">बुझिलिने कार्यालयले भर्ने (To):</p>
+                    <div className="border border-slate-400 p-3 relative rounded bg-emerald-50/20">
+                        <p className="font-bold mb-3">प्राप्त गर्ने कार्यालयले भर्ने (To):</p>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <div className="border-t border-slate-900 mt-4 pt-1 font-bold">तयार गर्ने (Recipient SK):</div>
-                                <div className="flex gap-1"><span>नाम:</span><input value={formDetails.recipientPreparedBy?.name} onChange={e => setFormDetails({...formDetails, recipientPreparedBy: {...formDetails.recipientPreparedBy!, name: e.target.value}})} disabled={activeTab === 'outgoing' || isViewOnly} className={inputClass + " flex-1 text-[9px] font-bold text-primary-700"} /></div>
-                                <div className="flex gap-1"><span>पद:</span><input value={formDetails.recipientPreparedBy?.designation} onChange={e => setFormDetails({...formDetails, recipientPreparedBy: {...formDetails.recipientPreparedBy!, designation: e.target.value}})} disabled={activeTab === 'outgoing' || isViewOnly} className={inputClass + " flex-1 text-[9px]"} /></div>
-                                <div className="flex gap-1"><span>मिति:</span><input value={formDetails.recipientPreparedBy?.date || todayBS} readOnly className={inputClass + " flex-1 text-[9px]"} /></div>
+                                <div className="border-t border-slate-900 mt-4 pt-1 font-bold flex items-center gap-1"><UserCheck size={10} className="text-emerald-600" /> बुझिलिने:</div>
+                                <div className="flex gap-1"><span>नाम:</span><input value={formDetails.recipientPreparedBy?.name || ''} onChange={e => setFormDetails({...formDetails, recipientPreparedBy: {...formDetails.recipientPreparedBy!, name: e.target.value}})} disabled={isViewOnly || activeTab === 'outgoing'} className={inputClass + " flex-1 text-[9px] font-bold"} /></div>
+                                <div className="flex gap-1"><span>पद:</span><input value={formDetails.recipientPreparedBy?.designation || ''} onChange={e => setFormDetails({...formDetails, recipientPreparedBy: {...formDetails.recipientPreparedBy!, designation: e.target.value}})} disabled={isViewOnly || activeTab === 'outgoing'} className={inputClass + " flex-1 text-[9px]"} /></div>
+                                <div className="flex gap-1"><span>मिति:</span><input value={formDetails.recipientPreparedBy?.date || ''} onChange={e => setFormDetails({...formDetails, recipientPreparedBy: {...formDetails.recipientPreparedBy!, date: e.target.value}})} disabled={isViewOnly || activeTab === 'outgoing'} className={inputClass + " flex-1 text-[9px]"} /></div>
                             </div>
                             <div className="space-y-2">
-                                <div className="border-t border-slate-900 mt-4 pt-1 font-bold">स्वीकृत गर्ने (Recipient Head):</div>
-                                <div className="flex gap-1"><span>नाम:</span><input value={formDetails.recipientApprovedBy?.name} onChange={e => setFormDetails({...formDetails, recipientApprovedBy: {...formDetails.recipientApprovedBy!, name: e.target.value}})} disabled={activeTab === 'outgoing' || isViewOnly} className={inputClass + " flex-1 text-[9px] font-bold text-green-700"} /></div>
-                                <div className="flex gap-1"><span>पद:</span><input value={formDetails.recipientApprovedBy?.designation} onChange={e => setFormDetails({...formDetails, recipientApprovedBy: {...formDetails.recipientApprovedBy!, designation: e.target.value}})} disabled={activeTab === 'outgoing' || isViewOnly} className={inputClass + " flex-1 text-[9px]"} /></div>
-                                <div className="flex gap-1"><span>मिति:</span><input value={formDetails.recipientApprovedBy?.date || todayBS} readOnly className={inputClass + " flex-1 text-[9px]"} /></div>
+                                <div className="border-t border-slate-900 mt-4 pt-1 font-bold flex items-center gap-1"><ShieldCheck size={10} className="text-emerald-600" /> स्वीकृत गर्ने:</div>
+                                <div className="flex gap-1"><span>नाम:</span><input value={formDetails.recipientApprovedBy?.name || ''} onChange={e => setFormDetails({...formDetails, recipientApprovedBy: {...formDetails.recipientApprovedBy!, name: e.target.value}})} disabled={isViewOnly || activeTab === 'outgoing' || !isApprover} className={inputClass + " flex-1 text-[9px] font-bold"} /></div>
+                                <div className="flex gap-1"><span>पद:</span><input value={formDetails.recipientApprovedBy?.designation || ''} onChange={e => setFormDetails({...formDetails, recipientApprovedBy: {...formDetails.recipientApprovedBy!, designation: e.target.value}})} disabled={isViewOnly || activeTab === 'outgoing' || !isApprover} className={inputClass + " flex-1 text-[9px]"} /></div>
+                                <div className="flex gap-1"><span>मिति:</span><input value={formDetails.recipientApprovedBy?.date || ''} onChange={e => setFormDetails({...formDetails, recipientApprovedBy: {...formDetails.recipientApprovedBy!, date: e.target.value}})} disabled={isViewOnly || activeTab === 'outgoing' || !isApprover} className={inputClass + " flex-1 text-[9px]"} /></div>
                             </div>
                         </div>
                     </div>

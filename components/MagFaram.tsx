@@ -201,20 +201,16 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
     if (isInstitutionalMode && !formDetails.targetOrg) { setValidationError("कृपया माग गर्ने संस्था छान्नुहोस्।"); return; }
     if (items.filter(i => i.name.trim() !== '').length === 0) { setValidationError("कृपया कम्तिमा एउटा सामानको नाम भर्नुहोस्।"); return; }
     
-    // --- NEW VALIDATION: STOCK CHECK DURING VERIFICATION ---
     if (isVerifying && formDetails.storeKeeper?.status === 'stock') {
         const insufficientItems: string[] = [];
         
         items.forEach(item => {
             if (!item.name.trim()) return;
-            
-            // Calculate total available quantity across all stores in the organization
             const totalAvailable = inventoryItems
                 .filter(i => i.itemName.trim().toLowerCase() === item.name.trim().toLowerCase())
                 .reduce((sum, i) => sum + (Number(i.currentQuantity) || 0), 0);
             
             const requestedQty = parseFloat(item.quantity) || 0;
-            
             if (requestedQty > totalAvailable) {
                 insufficientItems.push(`${item.name} (मौज्दात: ${totalAvailable}, माग: ${requestedQty})`);
             }
@@ -226,7 +222,6 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
         }
     }
 
-    // Final check for duplicates if already pending/verified
     if (!isNewForm && (formDetails.status === 'Approved' || formDetails.status === 'Rejected')) {
         alert("यो फारम पहिले नै प्रोसेस भइसकेको छ।");
         return;
@@ -399,8 +394,15 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                   <div className="flex-1 text-center">
                       <h1 className="text-lg font-bold">{generalSettings.orgNameNepali}</h1>
                       <h2 className="text-base font-bold">{generalSettings.subTitleNepali}</h2>
-                      <h3 className="text-sm font-bold">{generalSettings.subTitleNepali2}</h3>
-                      <h3 className="text-base font-bold">{generalSettings.subTitleNepali3}</h3>
+                      {generalSettings.subTitleNepali2 && <h3 className="text-sm font-bold">{generalSettings.subTitleNepali2}</h3>}
+                      {generalSettings.subTitleNepali3 && <h3 className="text-base font-bold">{generalSettings.subTitleNepali3}</h3>}
+                      <div className="text-[10px] mt-1.5 space-x-1 font-medium text-slate-600">
+                          {generalSettings.address && <span>{generalSettings.address}</span>}
+                          {generalSettings.phone && <span> | फोन नं: {generalSettings.phone}</span>}
+                          {generalSettings.email && <span> | ईमेल: {generalSettings.email}</span>}
+                          {generalSettings.website && <span> | वेबसाइट: {generalSettings.website}</span>}
+                          {generalSettings.panNo && <span> | पान/भ्याट नं: {generalSettings.panNo}</span>}
+                      </div>
                   </div>
                   <div className="w-24"></div> 
               </div>
