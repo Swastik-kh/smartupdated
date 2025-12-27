@@ -11,13 +11,15 @@ import { ref, onValue, set, remove, update, get, Unsubscribe } from "firebase/da
 import NepaliDate from 'nepali-date-converter';
 
 const INITIAL_SETTINGS: OrganizationSettings = {
-    orgNameNepali: 'Smart Inventory System',
+    orgNameNepali: 'स्मार्ट इन्भेन्टरी प्रणाली',
     orgNameEnglish: 'Smart Inventory System',
-    subTitleNepali: 'जिन्सी व्यवस्थापन प्रणाली',
-    address: 'City, Nepal',
-    phone: '01-XXXXXXX',
-    email: 'info@smartinventory.com',
-    website: 'www.smartinventory.com',
+    subTitleNepali: 'जिन्सी व्यवस्थापन शाखा',
+    subTitleNepali2: 'नगरकार्यपालिकाको कार्यालय',
+    subTitleNepali3: 'प्रदेश नं. १, नेपाल',
+    address: 'तपाईंको ठेगाना यहाँ लेख्नुहोस्',
+    phone: '०१-XXXXXXX',
+    email: 'info@yourdomain.com',
+    website: 'www.yourdomain.com',
     panNo: 'XXXXXXXXX',
     defaultVatRate: '13',
     activeFiscalYear: '2081/082',
@@ -34,7 +36,7 @@ const DEFAULT_ADMIN: User = {
     fullName: 'Administrator',
     designation: 'System Manager',
     phoneNumber: '98XXXXXXXX',
-    allowedMenus: ['dashboard', 'inventory', 'settings']
+    allowedMenus: ['dashboard', 'inventory', 'settings', 'general_setting', 'user_management', 'store_setup', 'database_management']
 };
 
 const STORAGE_KEY_USER = 'smart_inventory_active_user';
@@ -234,7 +236,6 @@ const App: React.FC = () => {
         const sourceSafeOrg = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
         const updates: Record<string, any> = {};
         
-        // Ensure source identity is preserved for recipient preview
         const finalEntry = {
             ...entry,
             sourceOrg: entry.sourceOrg || currentUser.organizationName,
@@ -245,21 +246,16 @@ const App: React.FC = () => {
             }
         };
 
-        // 1. Update source organization record
         updates[`orgData/${sourceSafeOrg}/hafaEntries/${entry.id}`] = finalEntry;
 
-        // 2. If approved, sync with recipient organization
         if (finalEntry.status === 'Approved') {
             const recipientName = finalEntry.recipientOrg?.trim();
             const targetUser = allUsers.find(u => u.organizationName.trim().toLowerCase() === recipientName.toLowerCase());
             
             if (targetUser) {
                 const targetSafeOrg = targetUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
-                
-                // Also create the Hafa entry in the recipient's office data for their signature
                 updates[`orgData/${targetSafeOrg}/hafaEntries/${finalEntry.id}`] = finalEntry;
 
-                // Prepare Stock Request for Recipient
                 const requestItems: InventoryItem[] = finalEntry.items.map((item, idx) => ({
                     id: `TEMP-${Date.now()}-${idx}`,
                     itemName: item.name,
@@ -271,7 +267,7 @@ const App: React.FC = () => {
                     specification: item.specification,
                     uniqueCode: item.codeNo,
                     lastUpdateDateBs: finalEntry.date,
-                    lastUpdateDateAd: new Date().toISOString().split('T')[0],
+                    lastUpdateDateAd: new NepaliDate().toJsDate().toISOString().split('T')[0],
                     fiscalYear: finalEntry.fiscalYear,
                     storeId: '', 
                     receiptSource: 'हस्तान्तरण (Transfer)'
@@ -280,7 +276,7 @@ const App: React.FC = () => {
                 const stockRequest: StockEntryRequest = {
                     id: `TR-${finalEntry.id}`,
                     requestDateBs: finalEntry.date,
-                    requestDateAd: new Date().toISOString().split('T')[0],
+                    requestDateAd: new NepaliDate().toJsDate().toISOString().split('T')[0],
                     fiscalYear: finalEntry.fiscalYear,
                     storeId: '', 
                     receiptSource: 'हस्तान्तरण (Transfer)',
@@ -301,7 +297,6 @@ const App: React.FC = () => {
         await update(ref(db), updates);
     } catch (error) {
         console.error("Error saving Hafa Entry:", error);
-        alert("त्रुटि: फारम सुरक्षित हुन सकेन।");
     }
   };
 
@@ -313,9 +308,7 @@ const App: React.FC = () => {
         const snap = await get(entryRef);
         if (snap.exists()) {
             const entry: HafaEntry = snap.val();
-            // Delete from source
             await remove(entryRef);
-            // If it was synced to a recipient (even if pending for them), try to remove there too
             if (entry.recipientOrg) {
                 const recipientName = entry.recipientOrg.trim();
                 const targetUser = allUsers.find(u => u.organizationName.trim().toLowerCase() === recipientName.toLowerCase());
@@ -328,7 +321,6 @@ const App: React.FC = () => {
         }
     } catch (error) {
         console.error("Error deleting Hafa Entry:", error);
-        alert("त्रुटि: फारम मेटाउन सकिएन।");
     }
   };
 
@@ -358,7 +350,7 @@ const App: React.FC = () => {
         }
         updates[`${orgPath}/returnEntries/${entry.id}`] = entry;
         await update(ref(db), updates);
-    } catch (error) { console.error(error); alert("Error saving return"); }
+    } catch (error) { console.error(error); }
   };
 
   const handleSaveMagForm = async (f: MagFormEntry) => {
@@ -391,7 +383,7 @@ const App: React.FC = () => {
               }
           }
           await update(ref(db), updates);
-      } catch (error) { console.error(error); alert("Error saving Mag Form"); }
+      } catch (error) { console.error(error); }
   };
 
   const handleApproveIssueReport = async (report: IssueReportEntry) => {
@@ -422,7 +414,6 @@ const App: React.FC = () => {
                 }
             });
 
-            // AUTOMATION: Create Transfer Form (Hafa) IF AND ONLY IF linked to an Institutional Request
             if (report.magFormId) {
                 const magSnap = await get(ref(db, `${orgPath}/magForms/${report.magFormId}`));
                 if (magSnap.exists()) {
@@ -467,8 +458,6 @@ const App: React.FC = () => {
                             preparedBy: { name: currentUser.fullName, designation: currentUser.designation, date: todayBs },
                             approvedBy: { name: '', designation: '', date: '' }
                         };
-
-                        // CRITICAL: Save to the PROVIDER'S database so their storekeeper sees it in Outgoing
                         updates[`orgData/${safeOrgName}/hafaEntries/${hafaId}`] = autoHafa;
                     }
                 }
@@ -476,7 +465,7 @@ const App: React.FC = () => {
         }
         updates[`${orgPath}/issueReports/${report.id}`] = report;
         await update(ref(db), updates);
-    } catch (error) { console.error(error); alert("Error issuing report"); }
+    } catch (error) { console.error(error); }
   };
 
   const handleApproveStockEntry = async (requestId: string, approverName: string, approverDesignation: string) => {
@@ -503,7 +492,7 @@ const App: React.FC = () => {
           }
           updates[`${orgPath}/stockRequests/${requestId}/status`] = 'Approved';
           await update(ref(db), updates);
-      } catch (error) { console.error(error); alert("Error during stock approval"); }
+      } catch (error) { console.error(error); }
   };
 
   return (
