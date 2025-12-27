@@ -16,4 +16,4 @@ export const FISCAL_YEARS: FiscalYear[] = [
 ];
 
 export const APP_NAME = "Smart Inventory";
-export const ORG_NAME = "स्वास्थ्य संस्था व्यवस्थापन प्रणाली";
+export const ORG_NAME = "जिन्सी व्यवस्थापन प्रणाली";

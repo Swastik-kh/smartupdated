@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, User, Lock, LogIn, Eye, EyeOff, Loader2, AlertCircle, Info, Code, ShieldAlert } from 'lucide-react';
+import { Calendar, User, Lock, LogIn, Eye, EyeOff, Loader2, ShieldAlert } from 'lucide-react';
 import { Input } from './Input';
 import { Select } from './Select';
 import { FISCAL_YEARS } from '../constants';
@@ -13,7 +13,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
     password: '',
   });
 
-  // Effect to sync formData when the default fiscal year is loaded from database
   useEffect(() => {
     if (initialFiscalYear) {
         setFormData(prev => ({ ...prev, fiscalYear: initialFiscalYear }));
@@ -23,8 +22,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
   const [errors, setErrors] = useState<Partial<LoginFormData & { form: string }>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showForgotPasswordMsg, setShowForgotPasswordMsg] = useState(false);
 
+  const usernameInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -38,6 +37,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
     }
   };
 
+  // Function to handle Enter key on username to focus password field
   const handleUsernameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -47,9 +47,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
 
   const validate = (): boolean => {
     const newErrors: Partial<LoginFormData> = {};
-    if (!formData.fiscalYear) newErrors.fiscalYear = 'आर्थिक वर्ष छान्नुहोस् (Select Fiscal Year)';
-    if (!formData.username.trim()) newErrors.username = 'प्रयोगकर्ता नाम आवश्यक छ (Username Required)';
-    if (!formData.password) newErrors.password = 'पासवर्ड आवश्यक छ (Password Required)';
+    if (!formData.fiscalYear) newErrors.fiscalYear = 'आर्थिक वर्ष छान्नुहोस्';
+    if (!formData.username.trim()) newErrors.username = 'प्रयोगकर्ता नाम आवश्यक छ';
+    if (!formData.password) newErrors.password = 'पासवर्ड आवश्यक छ';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -70,53 +70,26 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
       );
 
       if (foundUser) {
-          // Check if this organization has at least one ADMIN user
-          // Exception: Super Admins are always allowed to log in
-          const isSuperAdmin = foundUser.role === 'SUPER_ADMIN';
-          
-          if (!isSuperAdmin) {
-              const hasOrgAdmin = users.some(u => 
-                  u.organizationName === foundUser.organizationName && 
-                  u.role === 'ADMIN'
-              );
-
-              if (!hasOrgAdmin) {
-                  setErrors(prev => ({ 
-                      ...prev, 
-                      form: 'तपाईंको संस्थामा एडमिन प्रयोगकर्ता फेला परेन। लगइन अनुमति छैन। (Admin not found for your org. Login denied.)' 
-                  }));
-                  setIsLoading(false);
-                  return;
-              }
-          }
-
           onLoginSuccess(foundUser, formData.fiscalYear);
       } else {
           setErrors(prev => ({ 
               ...prev, 
-              form: 'प्रयोगकर्ता नाम वा पासवर्ड मिलेन (Invalid Username or Password)' 
+              form: 'प्रयोगकर्ता नाम वा पासवर्ड मिलेन' 
           }));
       }
     } catch (error) {
-      setErrors(prev => ({ ...prev, form: 'सिस्टममा समस्या आयो, पुनः प्रयास गर्नुहोस्' }));
+      setErrors(prev => ({ ...prev, form: 'सिस्टममा समस्या आयो' }));
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {errors.form && (
-        <div className="bg-red-50 text-red-600 text-sm p-4 rounded-xl border border-red-100 flex items-start gap-3 animate-in slide-in-from-top-2 duration-300">
-            <ShieldAlert size={20} className="shrink-0 mt-0.5" />
-            <span className="font-bold leading-tight font-nepali">{errors.form}</span>
-        </div>
-      )}
-
-      {showForgotPasswordMsg && (
-        <div className="bg-blue-50 text-blue-700 text-sm p-4 rounded-xl border border-blue-100 flex items-start gap-3">
-            <Info size={18} className="shrink-0 mt-0.5" />
-            <span className="font-medium">कृपया सिस्टम एडमिनसँग सम्पर्क गरी पासवर्ड रिसेट गराउनुहोस्। (Contact Admin to reset)</span>
+        <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg border border-red-100 flex items-center gap-2">
+            <ShieldAlert size={18} />
+            <span className="font-medium font-nepali">{errors.form}</span>
         </div>
       )}
 
@@ -129,17 +102,18 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
           options={FISCAL_YEARS}
           error={errors.fiscalYear}
           icon={<Calendar size={18} />}
-          className="font-nepali font-bold text-slate-700" 
+          className="font-bold text-primary-700"
         />
 
         <Input
+          ref={usernameInputRef}
           label="प्रयोगकर्ताको नाम (Username)"
           name="username"
           type="text"
-          placeholder="Enter username"
+          placeholder="Username"
           value={formData.username}
           onChange={handleChange}
-          onKeyDown={handleUsernameKeyDown} 
+          onKeyDown={handleUsernameKeyDown}
           error={errors.username}
           icon={<User size={18} />}
           autoComplete="username"
@@ -161,7 +135,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-[38px] text-slate-400 hover:text-primary-600 p-1 rounded-full transition-colors"
+            className="absolute right-3 top-[38px] text-slate-400 hover:text-primary-600 p-1 rounded-full"
             tabIndex={-1}
           >
             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -169,51 +143,27 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-sm">
-        <label className="flex items-center gap-2 cursor-pointer group select-none">
-          <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
-          <span className="text-slate-500 group-hover:text-slate-700 font-medium">सम्झिराख्नुहोस्</span>
-        </label>
-        <button 
-          type="button" 
-          onClick={() => setShowForgotPasswordMsg(!showForgotPasswordMsg)}
-          className="text-primary-600 hover:text-primary-700 font-semibold transition-colors"
-        >
-          पासवर्ड भुल्नुभयो?
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-primary-600/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed text-lg"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 size={20} className="animate-spin" />
-              <span>प्रक्रियामा छ...</span>
-            </>
-          ) : (
-            <>
-              <LogIn size={20} />
-              <span>लगइन गर्नुहोस्</span>
-            </>
-          )}
-        </button>
-
-        <div className="text-center pt-2 space-y-2">
-            <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
-                Smart Inventory Management System
-            </p>
-            <div className="flex items-center justify-center gap-1.5 text-slate-400">
-                <Code size={12} />
-                <p className="text-[11px] font-medium italic">
-                    Developed by: swastik khatiwada
-                </p>
-            </div>
-        </div>
-      </div>
+      <button
+        type="submit"
+        disabled={isLoading}
+        className="w-full bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 px-4 rounded-lg shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-70 font-nepali text-lg"
+      >
+        {isLoading ? (
+          <>
+            <Loader2 size={20} className="animate-spin" />
+            <span>प्रक्रियामा छ...</span>
+          </>
+        ) : (
+          <>
+            <LogIn size={20} />
+            <span>लगइन गर्नुहोस्</span>
+          </>
+        )}
+      </button>
+      
+      <p className="text-center text-xs text-slate-400 mt-4 italic font-nepali">
+        Developed by Swastik Khatiwada
+      </p>
     </form>
   );
 };

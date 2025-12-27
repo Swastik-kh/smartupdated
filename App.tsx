@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { LoginForm } from './components/LoginForm';
 import { Dashboard } from './components/Dashboard';
 import { APP_NAME, ORG_NAME } from './constants';
-import { Landmark, ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Box } from 'lucide-react';
 import { User, OrganizationSettings, MagFormEntry, RabiesPatient, PurchaseOrderEntry, IssueReportEntry, FirmEntry, QuotationEntry, InventoryItem, Store, StockEntryRequest, DakhilaPratibedanEntry, ReturnEntry, MarmatEntry, DhuliyaunaEntry, LogBookEntry, DakhilaItem, TBPatient, HafaEntry, HafaItem } from './types';
 import { db } from './firebase';
 import { ref, onValue, set, remove, update, get, Unsubscribe } from "firebase/database";
@@ -16,10 +16,10 @@ const INITIAL_SETTINGS: OrganizationSettings = {
     subTitleNepali: 'जिन्सी व्यवस्थापन शाखा',
     subTitleNepali2: 'नगरकार्यपालिकाको कार्यालय',
     subTitleNepali3: 'प्रदेश नं. १, नेपाल',
-    address: 'तपाईंको ठेगाना यहाँ लेख्नुहोस्',
+    address: 'बेल्टार, उदयपुर',
     phone: '०१-XXXXXXX',
-    email: 'info@yourdomain.com',
-    website: 'www.yourdomain.com',
+    email: 'info@domain.com',
+    website: 'www.domain.com',
     panNo: 'XXXXXXXXX',
     defaultVatRate: '13',
     activeFiscalYear: '2081/082',
@@ -105,26 +105,7 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!currentUser) {
-        setInventoryItems([]);
-        setStores([]);
-        setMagForms([]);
-        setHafaEntries([]);
-        setPurchaseOrders([]);
-        setIssueReports([]);
-        setStockEntryRequests([]);
-        setDakhilaReports([]);
-        setReturnEntries([]);
-        setFirms([]);
-        setQuotations([]);
-        setRabiesPatients([]);
-        setTbPatients([]);
-        setMarmatEntries([]);
-        setDhuliyaunaEntries([]);
-        setLogBookEntries([]);
-        setGeneralSettings(INITIAL_SETTINGS);
-        return;
-    }
+    if (!currentUser) return;
 
     const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
     const orgPath = `orgData/${safeOrgName}`;
@@ -230,271 +211,6 @@ const App: React.FC = () => {
       }
   };
 
-  const handleSaveHafaEntry = async (entry: HafaEntry) => {
-    if (!currentUser) return;
-    try {
-        const sourceSafeOrg = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
-        const updates: Record<string, any> = {};
-        
-        const finalEntry = {
-            ...entry,
-            sourceOrg: entry.sourceOrg || currentUser.organizationName,
-            sourceOrgDetails: entry.sourceOrgDetails || {
-                name: generalSettings.orgNameNepali,
-                subTitle: generalSettings.subTitleNepali,
-                address: generalSettings.address
-            }
-        };
-
-        updates[`orgData/${sourceSafeOrg}/hafaEntries/${entry.id}`] = finalEntry;
-
-        if (finalEntry.status === 'Approved') {
-            const recipientName = finalEntry.recipientOrg?.trim();
-            const targetUser = allUsers.find(u => u.organizationName.trim().toLowerCase() === recipientName.toLowerCase());
-            
-            if (targetUser) {
-                const targetSafeOrg = targetUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
-                updates[`orgData/${targetSafeOrg}/hafaEntries/${finalEntry.id}`] = finalEntry;
-
-                const requestItems: InventoryItem[] = finalEntry.items.map((item, idx) => ({
-                    id: `TEMP-${Date.now()}-${idx}`,
-                    itemName: item.name,
-                    unit: item.unit,
-                    currentQuantity: item.quantity,
-                    rate: item.rate,
-                    totalAmount: item.totalAmount,
-                    itemType: finalEntry.itemType,
-                    specification: item.specification,
-                    uniqueCode: item.codeNo,
-                    lastUpdateDateBs: finalEntry.date,
-                    lastUpdateDateAd: new NepaliDate().toJsDate().toISOString().split('T')[0],
-                    fiscalYear: finalEntry.fiscalYear,
-                    storeId: '', 
-                    receiptSource: 'हस्तान्तरण (Transfer)'
-                }));
-
-                const stockRequest: StockEntryRequest = {
-                    id: `TR-${finalEntry.id}`,
-                    requestDateBs: finalEntry.date,
-                    requestDateAd: new NepaliDate().toJsDate().toISOString().split('T')[0],
-                    fiscalYear: finalEntry.fiscalYear,
-                    storeId: '', 
-                    receiptSource: 'हस्तान्तरण (Transfer)',
-                    supplier: currentUser.organizationName,
-                    refNo: finalEntry.formNo,
-                    items: requestItems,
-                    status: 'Pending',
-                    requestedBy: currentUser.username,
-                    requesterName: currentUser.fullName,
-                    requesterDesignation: currentUser.designation,
-                    mode: 'add'
-                };
-
-                updates[`orgData/${targetSafeOrg}/stockRequests/${stockRequest.id}`] = stockRequest;
-            }
-        }
-
-        await update(ref(db), updates);
-    } catch (error) {
-        console.error("Error saving Hafa Entry:", error);
-    }
-  };
-
-  const handleDeleteHafaEntry = async (id: string) => {
-    if (!currentUser) return;
-    try {
-        const sourceSafeOrg = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
-        const entryRef = ref(db, `orgData/${sourceSafeOrg}/hafaEntries/${id}`);
-        const snap = await get(entryRef);
-        if (snap.exists()) {
-            const entry: HafaEntry = snap.val();
-            await remove(entryRef);
-            if (entry.recipientOrg) {
-                const recipientName = entry.recipientOrg.trim();
-                const targetUser = allUsers.find(u => u.organizationName.trim().toLowerCase() === recipientName.toLowerCase());
-                if (targetUser) {
-                    const targetSafeOrg = targetUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
-                    await remove(ref(db, `orgData/${targetSafeOrg}/hafaEntries/${id}`));
-                    await remove(ref(db, `orgData/${targetSafeOrg}/stockRequests/TR-${id}`));
-                }
-            }
-        }
-    } catch (error) {
-        console.error("Error deleting Hafa Entry:", error);
-    }
-  };
-
-  const handleSaveReturnEntry = async (entry: ReturnEntry) => {
-    if (!currentUser) return;
-    try {
-        const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
-        const orgPath = `orgData/${safeOrgName}`;
-        const existingSnap = await get(ref(db, `${orgPath}/returnEntries/${entry.id}`));
-        const prevStatus = existingSnap.exists() ? existingSnap.val().status : null;
-        const updates: Record<string, any> = {};
-
-        if (entry.status === 'Approved' && prevStatus !== 'Approved') {
-            const invSnap = await get(ref(db, `${orgPath}/inventory`));
-            const inventory: Record<string, InventoryItem> = invSnap.exists() ? invSnap.val() : {};
-            const invList = Object.keys(inventory).map(k => ({ ...inventory[k], id: k }));
-
-            for (const retItem of entry.items) {
-                const matchingItem = invList.find(i => i.itemName.trim().toLowerCase() === retItem.name.trim().toLowerCase());
-                if (matchingItem) {
-                    const currentQty = Number(matchingItem.currentQuantity) || 0;
-                    const returnQty = Number(retItem.quantity) || 0;
-                    const newQty = currentQty + returnQty;
-                    updates[`${orgPath}/inventory/${matchingItem.id}`] = { ...matchingItem, currentQuantity: newQty, lastUpdateDateBs: entry.date };
-                }
-            }
-        }
-        updates[`${orgPath}/returnEntries/${entry.id}`] = entry;
-        await update(ref(db), updates);
-    } catch (error) { console.error(error); }
-  };
-
-  const handleSaveMagForm = async (f: MagFormEntry) => {
-      if (!currentUser) return;
-      try {
-          const updates: Record<string, any> = {};
-          const formToSave = { ...f, sourceOrg: f.sourceOrg || currentUser.organizationName };
-          
-          const sourceSafeName = formToSave.sourceOrg.trim().replace(/[.#$[\]]/g, "_");
-          updates[`orgData/${sourceSafeName}/magForms/${formToSave.id}`] = formToSave;
-          
-          if (formToSave.isInstitutional && formToSave.targetOrg) {
-              const targetSafeName = formToSave.targetOrg.trim().replace(/[.#$[\]]/g, "_");
-              updates[`orgData/${targetSafeName}/magForms/${formToSave.id}`] = formToSave;
-          }
-
-          if (formToSave.status === 'Approved') {
-              const actingOrg = formToSave.targetOrg || formToSave.sourceOrg || currentUser.organizationName;
-              const actingSafeOrg = actingOrg.trim().replace(/[.#$[\]]/g, "_");
-              const orgPath = `orgData/${actingSafeOrg}`;
-              
-              if (formToSave.storeKeeper?.status === 'market') {
-                  const poId = `PO-${formToSave.id}`;
-                  const poPath = `${orgPath}/purchaseOrders/${poId}`;
-                  updates[poPath] = { id: poId, magFormId: formToSave.id, magFormNo: formToSave.formNo, requestDate: formToSave.date, items: formToSave.items, status: 'Pending', fiscalYear: formToSave.fiscalYear };
-              } else if (formToSave.storeKeeper?.status === 'stock') {
-                  const irId = `IR-${formToSave.id}`;
-                  const irPath = `${orgPath}/issueReports/${irId}`;
-                  updates[irPath] = { id: irId, magFormId: formToSave.id, magFormNo: formToSave.formNo, requestDate: formToSave.date, items: formToSave.items, status: 'Pending', fiscalYear: formToSave.fiscalYear, itemType: formToSave.issueItemType || 'Expendable', storeId: formToSave.selectedStoreId, demandBy: formToSave.demandBy };
-              }
-          }
-          await update(ref(db), updates);
-      } catch (error) { console.error(error); }
-  };
-
-  const handleApproveIssueReport = async (report: IssueReportEntry) => {
-    if (!currentUser) return;
-    try {
-        const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
-        const orgPath = `orgData/${safeOrgName}`;
-        const currentReportSnap = await get(ref(db, `${orgPath}/issueReports/${report.id}`));
-        const prevStatus = currentReportSnap.exists() ? currentReportSnap.val().status : null;
-        const updates: Record<string, any> = {};
-
-        if (report.status === 'Issued' && prevStatus !== 'Issued') {
-            const invSnap = await get(ref(db, `${orgPath}/inventory`));
-            const inventory: Record<string, InventoryItem> = invSnap.exists() ? invSnap.val() : {};
-            const inventoryKeys = Object.keys(inventory);
-
-            report.items.forEach(rptItem => {
-                let remainingToIssue = Number(rptItem.quantity) || 0;
-                const matches = inventoryKeys
-                    .map(key => ({ key, data: inventory[key] }))
-                    .filter(item => item.data.itemName.trim().toLowerCase() === rptItem.name.trim().toLowerCase() && item.data.storeId === report.storeId && item.data.currentQuantity > 0);
-                
-                for (const invMatch of matches) {
-                    if (remainingToIssue <= 0) break;
-                    const takeQty = Math.min(invMatch.data.currentQuantity, remainingToIssue);
-                    remainingToIssue -= takeQty;
-                    updates[`${orgPath}/inventory/${invMatch.key}/currentQuantity`] = invMatch.data.currentQuantity - takeQty;
-                }
-            });
-
-            if (report.magFormId) {
-                const magSnap = await get(ref(db, `${orgPath}/magForms/${report.magFormId}`));
-                if (magSnap.exists()) {
-                    const magForm: MagFormEntry = magSnap.val();
-                    if (magForm.isInstitutional && magForm.sourceOrg) {
-                        const hafaId = `HF-AUTO-${report.id}`;
-                        const todayBs = new NepaliDate().format('YYYY-MM-DD');
-                        
-                        const hafaItems: HafaItem[] = report.items.map((item, idx) => ({
-                            id: Date.now() + idx,
-                            codeNo: item.codeNo || '',
-                            name: item.name,
-                            specification: item.specification || '',
-                            model: '',
-                            idNo: '',
-                            unit: item.unit,
-                            quantity: Number(item.quantity) || 0,
-                            rate: item.rate || 0,
-                            totalAmount: (Number(item.quantity) || 0) * (item.rate || 0),
-                            startDate: todayBs,
-                            condition: 'चालू',
-                            remarks: `निकासा नं. ${report.issueNo || report.id} बाट स्वतः सिर्जना`
-                        }));
-
-                        const autoHafa: HafaEntry = {
-                            id: hafaId,
-                            fiscalYear: report.fiscalYear || currentFiscalYear,
-                            formNo: 'TBD', 
-                            date: todayBs,
-                            status: 'Pending',
-                            decisionNo: `माग फारम नं. ${magForm.formNo}`,
-                            decisionDate: magForm.date,
-                            recipientOrg: magForm.sourceOrg, 
-                            sourceOrg: currentUser.organizationName,
-                            sourceOrgDetails: {
-                                name: generalSettings.orgNameNepali,
-                                subTitle: generalSettings.subTitleNepali,
-                                address: generalSettings.address
-                            },
-                            itemType: report.itemType || 'Expendable',
-                            items: hafaItems,
-                            preparedBy: { name: currentUser.fullName, designation: currentUser.designation, date: todayBs },
-                            approvedBy: { name: '', designation: '', date: '' }
-                        };
-                        updates[`orgData/${safeOrgName}/hafaEntries/${hafaId}`] = autoHafa;
-                    }
-                }
-            }
-        }
-        updates[`${orgPath}/issueReports/${report.id}`] = report;
-        await update(ref(db), updates);
-    } catch (error) { console.error(error); }
-  };
-
-  const handleApproveStockEntry = async (requestId: string, approverName: string, approverDesignation: string) => {
-      if (!currentUser) return;
-      try {
-          const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
-          const orgPath = `orgData/${safeOrgName}`;
-          const requestSnap = await get(ref(db, `${orgPath}/stockRequests/${requestId}`));
-          if (!requestSnap.exists()) return;
-          const request: StockEntryRequest = requestSnap.val();
-          const invAllSnap = await get(ref(db, `${orgPath}/inventory`));
-          const currentInvData = invAllSnap.val() || {};
-          const currentInvList: InventoryItem[] = Object.keys(currentInvData).map(k => ({ ...currentInvData[k], id: k }));
-          const updates: Record<string, any> = {};
-
-          for (const item of request.items) {
-              const existingItem = currentInvList.find(i => i.itemName.trim().toLowerCase() === item.itemName.trim().toLowerCase() && i.storeId === request.storeId && i.batchNo === item.batchNo);
-              if (existingItem) {
-                  updates[`${orgPath}/inventory/${existingItem.id}/currentQuantity`] = (Number(existingItem.currentQuantity) || 0) + (Number(item.currentQuantity) || 0);
-              } else {
-                  const newId = item.id.startsWith('TEMP') ? `ITEM-${Date.now()}-${Math.random().toString(36).substring(7)}` : item.id;
-                  updates[`${orgPath}/inventory/${newId}`] = { ...item, id: newId, storeId: request.storeId, fiscalYear: request.fiscalYear };
-              }
-          }
-          updates[`${orgPath}/stockRequests/${requestId}/status`] = 'Approved';
-          await update(ref(db), updates);
-      } catch (error) { console.error(error); }
-  };
-
   return (
     <>
       {currentUser ? (
@@ -510,14 +226,14 @@ const App: React.FC = () => {
           generalSettings={generalSettings}
           onUpdateGeneralSettings={handleUpdateGeneralSettings}
           magForms={magForms}
-          onSaveMagForm={handleSaveMagForm}
+          onSaveMagForm={(f) => set(getOrgRef(`magForms/${f.id}`), f)}
           hafaEntries={hafaEntries}
-          onSaveHafaEntry={handleSaveHafaEntry}
-          onDeleteHafaEntry={handleDeleteHafaEntry}
+          onSaveHafaEntry={(e) => set(getOrgRef(`hafaEntries/${e.id}`), e)}
+          onDeleteHafaEntry={(id) => remove(getOrgRef(`hafaEntries/${id}`))}
           purchaseOrders={purchaseOrders}
           onUpdatePurchaseOrder={(o) => set(getOrgRef(`purchaseOrders/${o.id}`), o)}
           issueReports={issueReports}
-          onUpdateIssueReport={handleApproveIssueReport} 
+          onUpdateIssueReport={(r) => set(getOrgRef(`issueReports/${r.id}`), r)}
           rabiesPatients={rabiesPatients}
           onAddRabiesPatient={async (p) => { await set(getOrgRef(`rabiesPatients/${p.id}`), p); }}
           onUpdateRabiesPatient={async (p) => { await set(getOrgRef(`rabiesPatients/${p.id}`), p); }}
@@ -535,8 +251,8 @@ const App: React.FC = () => {
           onUpdateInventoryItem={(i) => set(getOrgRef(`inventory/${i.id}`), i)}
           stockEntryRequests={stockEntryRequests}
           onRequestStockEntry={(r) => set(getOrgRef(`stockRequests/${r.id}`), r)}
-          onApproveStockEntry={handleApproveStockEntry}
-          onRejectStockEntry={(id, res, app) => update(getOrgRef(`stockRequests/${id}`), { status: 'Rejected', rejectionReason: res, approvedBy: app })}
+          onApproveStockEntry={() => {}} 
+          onRejectStockEntry={() => {}}
           stores={stores}
           onAddStore={(s) => set(getOrgRef(`stores/${s.id}`), s)}
           onUpdateStore={(s) => set(getOrgRef(`stores/${s.id}`), s)}
@@ -544,7 +260,7 @@ const App: React.FC = () => {
           dakhilaReports={dakhilaReports}
           onSaveDakhilaReport={(r) => set(getOrgRef(`dakhilaReports/${r.id}`), r)}
           returnEntries={returnEntries}
-          onSaveReturnEntry={handleSaveReturnEntry}
+          onSaveReturnEntry={(e) => set(getOrgRef(`returnEntries/${e.id}`), e)}
           marmatEntries={marmatEntries}
           onSaveMarmatEntry={(e) => set(getOrgRef(`marmatEntries/${e.id}`), e)}
           dhuliyaunaEntries={dhuliyaunaEntries}
@@ -554,43 +270,33 @@ const App: React.FC = () => {
           onClearData={(p) => remove(getOrgRef(p))}
         />
       ) : (
-        <div className="min-h-screen w-full bg-[#f8fafc] flex items-center justify-center p-6 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:20px_20px] overflow-y-auto">
-          <div className="w-full max-w-[440px] py-10 animate-in fade-in zoom-in-95 duration-500">
-            <div className="bg-white rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.08)] overflow-hidden border border-slate-100">
-              <div className="bg-primary-600 p-12 text-center text-white relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                    <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                        <path d="M0 100 C 20 0 50 0 100 100 Z" fill="currentColor"></path>
-                    </svg>
+        <div className="min-h-screen w-full bg-slate-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-[420px] animate-in fade-in zoom-in-95 duration-500">
+            <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200">
+              <div className="bg-primary-600 p-10 text-center text-white">
+                <div className="bg-white/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/30">
+                    <Box size={32} />
                 </div>
-                <div className="relative z-10">
-                    <div className="bg-white/20 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 backdrop-blur-md shadow-inner border border-white/30">
-                        <Landmark className="w-10 h-10 text-white" />
-                    </div>
-                    <h1 className="text-4xl font-extrabold font-nepali tracking-tight mb-2">{APP_NAME}</h1>
-                    <p className="text-primary-100 font-semibold tracking-wide uppercase text-xs">जिन्सी व्यवस्थापन पोर्टल</p>
-                </div>
+                <h1 className="text-3xl font-bold font-nepali tracking-tight">{APP_NAME}</h1>
+                <p className="text-sm font-nepali text-primary-100 mt-1">जिन्सी व्यवस्थापन अब तपाइँको हातमा</p>
+                <p className="text-primary-200 text-[10px] mt-2 uppercase font-bold tracking-widest opacity-60">Login Portal</p>
               </div>
-              <div className="p-10">
+              <div className="p-8">
                 <LoginForm 
                     users={allUsers} 
                     onLoginSuccess={handleLoginSuccess} 
                     initialFiscalYear={appDefaultFiscalYear} 
                 />
               </div>
-              <div className="bg-slate-50 p-5 text-center border-t border-slate-100 flex items-center justify-center gap-3">
-                 <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-full shadow-sm border border-slate-200">
-                    <span className={`w-2 h-2 rounded-full ${isDbConnected ? 'bg-green-50 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-50 animate-pulse'}`}></span>
-                    <span className="text-[11px] text-slate-600 font-bold uppercase tracking-wider">{isDbConnected ? 'System Online' : 'System Offline'}</span>
-                 </div>
-                 <div className="flex items-center gap-1.5 text-slate-400">
+              <div className="bg-slate-50 p-4 text-center border-t border-slate-100">
+                 <div className="flex items-center justify-center gap-2 text-slate-400">
                     <ShieldCheck size={14} />
-                    <span className="text-[11px] font-medium">Secure Access</span>
+                    <span className="text-[10px] font-bold uppercase tracking-tight">Protected Database | v2.0</span>
                  </div>
               </div>
             </div>
-            <p className="text-center mt-8 text-slate-400 text-xs font-medium uppercase tracking-widest">
-                &copy; {new Date().getFullYear()} Smart Inventory Solutions
+            <p className="text-center mt-6 text-slate-400 text-xs font-bold uppercase tracking-widest">
+                &copy; {new Date().getFullYear()} {APP_NAME}
             </p>
           </div>
         </div>

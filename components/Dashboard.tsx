@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Syringe, Activity, 
   ClipboardList, FileSpreadsheet, FilePlus, ShoppingCart, FileOutput, 
   BookOpen, Book, Archive, RotateCcw, Wrench, Scroll, BarChart3,
-  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User, Printer, SearchX, AlertOctagon, GraduationCap, Award, Search, Eye, Award as AwardIcon, Download, TrendingDown, Clipboard, Beaker, ArrowRightLeft, Droplets
+  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User, Printer, SearchX, AlertOctagon, GraduationCap, Award, Search, Eye, Award as AwardIcon, Download, TrendingDown, Clipboard, Beaker, ArrowRightLeft, Droplets, FlaskConical
 } from 'lucide-react';
 import { APP_NAME, ORG_NAME, FISCAL_YEARS } from '../constants';
 import { DashboardProps, PurchaseOrderEntry, InventoryItem, RabiesPatient, HafaEntry } from '../types'; 
@@ -104,7 +104,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [showCompletedModal, setShowCompletedModal] = useState(false);
   const [showForecastModal, setShowForecastModal] = useState(false); 
   const [completedSearchTerm, setCompletedSearchTerm] = useState('');
-  const [selectedReportPatient, setSelectedReportPatient] = useState<RabiesPatient | null>(null);
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [expiryModalTab, setExpiryModalTab] = useState<'soon' | 'expired'>('soon');
   const [lastSeenNotificationId, setLastSeenNotificationId] = useState<string | null>(null);
@@ -214,7 +213,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     const myOrgInventory = inventoryItems.filter(item => currentUser.role === 'SUPER_ADMIN' || !item.orgName || item.orgName === currentUser.organizationName);
     
-    // Rabies Vaccine Logic - Refined with Volume calculation (0.2ml/dose)
+    // Rabies Vaccine Specific Calculations
     const rabiesVaccineItems = myOrgInventory.filter(item => 
         item.itemName.toLowerCase().includes('rabies') || 
         item.itemName.toLowerCase().includes('arv')
@@ -228,8 +227,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         .filter(item => item.itemName.includes('1') && !item.itemName.includes('0.5') || (item.specification && item.specification.includes('1') && !item.specification.includes('0.5')))
         .reduce((sum, item) => sum + (item.currentQuantity || 0), 0);
 
+    // LOGIC: 1 Dose = 0.2 ml
     const totalMlAvailable = (stock05ml * 0.5) + (stock1ml * 1.0);
-    const totalMlRequired = pendingRabiesDosesCount * 0.2; // 0.2ml per dose rule
+    const totalMlRequired = pendingRabiesDosesCount * 0.2; 
     const totalVials = stock05ml + stock1ml;
 
     const expiringSoonItems = myOrgInventory.filter(item => {
@@ -478,17 +478,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowForecastModal(false)}></div>
               <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95">
-                  <div className="px-8 py-6 border-b bg-primary-600 flex justify-between items-center text-white">
+                  <div className="px-8 py-6 border-b bg-indigo-600 flex justify-between items-center text-white">
                       <div className="flex items-center gap-3">
                           <TrendingDown size={24} />
-                          <h3 className="font-black font-nepali text-lg">खोप आवश्यकता प्रक्षेपण (ARV Forecast)</h3>
+                          <h3 className="font-black font-nepali text-lg">खोप आवश्यकता विश्लेषण (ARV Forecast)</h3>
                       </div>
                       <button onClick={() => setShowForecastModal(false)} className="p-2 hover:bg-white/20 rounded-full"><X size={20}/></button>
                   </div>
                   <div className="p-8 space-y-6">
                       <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <Warehouse size={12}/> Current Inventory Status (in ml)
+                            <Warehouse size={12}/> Current Inventory Status (ml)
                           </p>
                           <div className="grid grid-cols-2 gap-4">
                               <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
@@ -503,7 +503,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               </div>
                           </div>
                           <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center">
-                              <span className="text-xs font-bold text-slate-500 uppercase">Total Volume Available:</span>
+                              <span className="text-xs font-bold text-slate-500 uppercase">Total Available:</span>
                               <span className="text-xl font-black text-slate-800">{stats.totalMlAvailable.toFixed(1)} ml</span>
                           </div>
                       </div>
@@ -511,7 +511,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <div className="bg-orange-50 p-6 rounded-2xl border border-orange-200">
                           <div className="flex justify-between items-center mb-4">
                              <div>
-                                <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-1">Future Demand (0.2ml/dose)</p>
+                                <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-1">Requirement Analysis (0.2ml/dose)</p>
                                 <h4 className="text-3xl font-black text-orange-700">{stats.totalMlRequired.toFixed(1)} ml</h4>
                                 <p className="text-[10px] font-bold text-orange-600">for {stats.pendingRabiesDosesCount} Pending Doses</p>
                              </div>
@@ -520,8 +520,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                              </div>
                           </div>
                           <div className="space-y-2 border-t border-orange-100 pt-3">
-                              <p className="text-[10px] text-orange-800 flex justify-between"><span>Minimum 1ml Vials Needed:</span> <span className="font-bold">{Math.ceil(stats.totalMlRequired)} Vials</span></p>
-                              <p className="text-[10px] text-orange-800 flex justify-between"><span>Minimum 0.5ml Vials Needed:</span> <span className="font-bold">{Math.ceil(stats.totalMlRequired / 0.5)} Vials</span></p>
+                              {stats.totalMlRequired > stats.totalMlAvailable ? (
+                                <>
+                                  <p className="text-[10px] text-red-700 flex justify-between"><span>अपुग भोल्युम (Deficit):</span> <span className="font-bold">{(stats.totalMlRequired - stats.totalMlAvailable).toFixed(1)} ml</span></p>
+                                  <p className="text-[10px] text-indigo-800 flex justify-between"><span>नयाँ अर्डर गर्नुपर्ने १ml भायल:</span> <span className="font-bold">{Math.ceil(stats.totalMlRequired - stats.totalMlAvailable)} Vials</span></p>
+                                  <p className="text-[10px] text-indigo-800 flex justify-between"><span>नयाँ अर्डर गर्नुपर्ने ०.५ml भायल:</span> <span className="font-bold">{Math.ceil((stats.totalMlRequired - stats.totalMlAvailable) / 0.5)} Vials</span></p>
+                                </>
+                              ) : (
+                                <p className="text-xs font-bold text-emerald-600 text-center py-2">मौज्दात पर्याप्त छ। थप अर्डर आवश्यक छैन।</p>
+                              )}
                           </div>
                       </div>
 
@@ -537,7 +544,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               }
                           </div>
                           <div>
-                              <h4 className="font-black text-sm uppercase tracking-tight">Status: {stats.totalMlAvailable >= stats.totalMlRequired ? 'Stock Sufficient' : 'Stock Critical'}</h4>
+                              <h4 className="font-black text-sm uppercase tracking-tight">Status: {stats.totalMlAvailable >= stats.totalMlRequired ? 'Safe Stock' : 'Critical Stock'}</h4>
                               <p className="text-xs font-bold font-nepali mt-1 leading-relaxed">
                                   {stats.totalMlAvailable >= stats.totalMlRequired 
                                     ? 'हालको बिरामीहरूको बाँकी डोज पुरा गर्न मौज्दात पर्याप्त छ।' 
@@ -549,7 +556,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                       <div className="bg-slate-50 p-4 rounded-xl text-[10px] text-slate-500 font-medium italic leading-relaxed">
                         <Info size={12} className="inline mr-1" />
-                        गणना आधार: १ डोज बराबर ०.२ ml खपत। ०.५ ml भायल = २.५ डोज, १ ml भायल = ५ डोज।
+                        नियम: १ डोज = ०.२ ml। तसर्थ १ ml भायलबाट ५ डोज र ०.५ ml भायलबाट २.५ डोज खोप लगाउन सकिन्छ।
                       </div>
                   </div>
                   <div className="p-4 bg-slate-50 border-t flex justify-end">
