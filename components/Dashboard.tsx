@@ -5,10 +5,10 @@ import {
   ChevronDown, ChevronRight, Syringe, Activity, 
   ClipboardList, FileSpreadsheet, FilePlus, ShoppingCart, FileOutput, 
   BookOpen, Book, Archive, RotateCcw, Wrench, Scroll, BarChart3,
-  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck
+  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User
 } from 'lucide-react';
 import { APP_NAME, ORG_NAME, FISCAL_YEARS } from '../constants';
-import { DashboardProps, PurchaseOrderEntry, InventoryItem } from '../types'; 
+import { DashboardProps, PurchaseOrderEntry, InventoryItem, RabiesPatient } from '../types'; 
 import { UserManagement } from './UserManagement';
 import { ChangePassword } from './ChangePassword';
 import { TBPatientRegistration } from './TBPatientRegistration';
@@ -95,6 +95,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const [pendingPoDakhila, setPendingPoDakhila] = useState<PurchaseOrderEntry | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [lastSeenNotificationId, setLastSeenNotificationId] = useState<string | null>(null);
 
   const latestApprovedDakhila = useMemo(() => {
@@ -117,31 +118,47 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const todayStr = today.format('YYYY-MM-DD'); 
     const todayAd = new Date().toISOString().split('T')[0];
     
-    // Total Registered Today (Day 0)
     const todayRabiesReg = rabiesPatients.filter(p => p.regDateBs === todayStr).length;
     
-    // Scheduled vs Visited Calculation
     let scheduledToday = 0;
     let visitedToday = 0;
     let totalFutureDosesNeeded = 0;
+    const patientsForToday: Array<{patient: RabiesPatient, doseDay: number, status: string}> = [];
 
     rabiesPatients.forEach(patient => {
         (patient.schedule || []).forEach(dose => {
-            if (dose.date === todayAd) {
+            const isScheduledToday = dose.date === todayAd;
+            const isGivenToday = dose.status === 'Given' && (dose.givenDate === todayAd || (isScheduledToday && !dose.givenDate));
+
+            if (isScheduledToday) {
                 scheduledToday++;
-                if (dose.status === 'Given') {
+            }
+            
+            // Include in modal if either scheduled for today OR already given today
+            if (isScheduledToday || isGivenToday) {
+                if (isGivenToday) {
                     visitedToday++;
                 }
+                patientsForToday.push({
+                    patient,
+                    doseDay: dose.day,
+                    status: dose.status
+                });
             }
+
             if (dose.status === 'Pending') {
                 totalFutureDosesNeeded++;
             }
         });
     });
+
+    // Sort: Pending patients first, then those who received the vaccine
+    patientsForToday.sort((a, b) => {
+        if (a.status === 'Pending' && b.status === 'Given') return -1;
+        if (a.status === 'Given' && b.status === 'Pending') return 1;
+        return a.patient.name.localeCompare(b.patient.name);
+    });
     
-    // Vials calculation logic:
-    // For 1ml vial: 1 vial can serve ~5 ID doses (0.2ml each)
-    // For 0.5ml vial: 1 vial can serve ~2 doses (with safety margin)
     const vials1mlNeeded = Math.ceil(totalFutureDosesNeeded / 5);
     const vials05mlNeeded = Math.ceil(totalFutureDosesNeeded / 2);
 
@@ -152,6 +169,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       totalFutureDosesNeeded,
       vials1mlNeeded,
       vials05mlNeeded,
+      patientsForToday,
       totalInventory: inventoryItems.length, 
       pendingMagForms: magForms.filter(f => f.status === 'Pending').length, 
       pendingStockReq: stockEntryRequests.filter(r => r.status === 'Pending').length 
@@ -208,9 +226,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     switch (activeItem) {
       case 'dashboard': return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            <div className="flex items-center gap-3 border-b border-slate-200 pb-4 mb-4">
-                <div className="bg-primary-100 p-2 rounded-lg text-primary-600"><LayoutDashboard size={24} /></div>
-                <div><h2 className="text-xl font-bold text-slate-800 font-nepali">मुख्य ड्यासबोर्ड</h2><p className="text-xs text-slate-500 font-medium font-nepali">हालको अवस्था र तथ्याङ्क</p></div>
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-primary-100 p-2 rounded-lg text-primary-600"><LayoutDashboard size={24} /></div>
+                  <div><h2 className="text-xl font-bold text-slate-800 font-nepali">मुख्य ड्यासबोर्ड</h2><p className="text-xs text-slate-500 font-medium font-nepali">हालको अवस्था र तथ्याङ्क</p></div>
+                </div>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -227,8 +247,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                 </div>
 
-                {/* Stat Card 2: Today's Vaccination Attendance */}
-                <div className="bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-all group">
+                {/* Stat Card 2: Today's Vaccination Attendance (Clickable) */}
+                <div 
+                  onClick={() => setShowAttendanceModal(true)}
+                  className="bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-all group cursor-pointer active:scale-95"
+                >
                     <div className="flex justify-between items-start">
                         <div>
                             <div className="flex items-baseline gap-1">
@@ -243,13 +266,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 ></div>
                             </div>
                         </div>
-                        <div className="bg-emerald-50 p-2.5 rounded-xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                        <div className="bg-emerald p-2.5 rounded-xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                             <CalendarCheck size={20} />
                         </div>
                     </div>
                 </div>
 
-                {/* Stat Card 3: Vials Needed (Split 1ml and 0.5ml) */}
+                {/* Stat Card 3: Vials Needed */}
                 <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition-all group">
                     <div className="flex justify-between items-start">
                         <div className="flex-1">
@@ -306,6 +329,84 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <p className="text-primary-100 font-medium opacity-90 text-sm">स्मार्ट जिन्सी व्यवस्थापन प्रणालीमा तपाईंलाई स्वागत छ।</p>
                 </div>
             </div>
+
+            {/* Attendance Detail Modal */}
+            {showAttendanceModal && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setShowAttendanceModal(false)}></div>
+                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                        <div className="px-6 py-5 border-b bg-emerald-50 text-emerald-800 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-emerald-100 p-2 rounded-xl text-emerald-600">
+                                    <CalendarCheck size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold font-nepali text-lg">आजको खोप हाजिरी विवरण</h3>
+                                    <p className="text-xs text-emerald-600 font-medium">{new NepaliDate().format('YYYY MMMM DD')} (आजको खोप गतिविधि)</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowAttendanceModal(false)} className="p-2 hover:bg-emerald-100 rounded-full transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto max-h-[60vh] p-6">
+                            {stats.patientsForToday.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                                    <Activity size={48} className="opacity-20 mb-4" />
+                                    <p className="font-nepali text-lg font-bold">आज कुनै खोप तालिका छैन।</p>
+                                    <p className="text-sm">No vaccination activities scheduled for today.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {stats.patientsForToday.map(({ patient, doseDay, status }, idx) => (
+                                        <div key={idx} className={`flex items-center justify-between p-4 rounded-2xl border transition-colors ${
+                                            status === 'Given' 
+                                            ? 'border-emerald-100 bg-emerald-50/20' 
+                                            : 'border-orange-100 bg-orange-50/20'
+                                        }`}>
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                                                    status === 'Given' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'
+                                                }`}>
+                                                    {patient.name.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-slate-800">{patient.name}</h4>
+                                                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                                        <span>ID: {patient.regNo}</span>
+                                                        <span>•</span>
+                                                        <span>{patient.phone || 'No Phone'}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="bg-white px-3 py-1 rounded-full border border-slate-200 text-[10px] font-black text-slate-600">DAY {doseDay}</span>
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider ${
+                                                    status === 'Given' 
+                                                    ? 'bg-emerald-500 text-white border-emerald-600' 
+                                                    : 'bg-orange-500 text-white border-orange-600 animate-pulse'
+                                                }`}>
+                                                    {status === 'Given' ? 'सम्पन्न (Done)' : 'बाँकी (Pending)'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="p-4 bg-slate-50 border-t flex justify-end gap-3">
+                            <button 
+                                onClick={() => { setShowAttendanceModal(false); setActiveItem('rabies'); }}
+                                className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 active:scale-95 transition-all flex items-center gap-2"
+                            >
+                                <Syringe size={16} /> क्लिनिकमा जानुहोस्
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
       );
       case 'general_setting': return <GeneralSetting settings={generalSettings} onUpdateSettings={onUpdateGeneralSettings} />;

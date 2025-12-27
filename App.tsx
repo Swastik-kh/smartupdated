@@ -158,25 +158,57 @@ const App: React.FC = () => {
     setupOrgListener('disposalEntries', setDhuliyaunaEntries);
     setupOrgListener('logBook', setLogBookEntries);
 
-    // SPECIAL CASE: Super Admin Rabies Access - Loads all orgData
+    // SPECIAL CASE: Super Admin Access - Loads all orgData
     if (currentUser.role === 'SUPER_ADMIN') {
         const allOrgRef = ref(db, 'orgData');
         const unsub = onValue(allOrgRef, (snap) => {
             const allData = snap.val() || {};
             const combinedRabies: RabiesPatient[] = [];
+            const combinedInventory: InventoryItem[] = [];
+            const combinedStores: Store[] = [];
+
             Object.keys(allData).forEach(orgKey => {
+                const orgNameClean = orgKey.replace(/_/g, ' ');
+                
+                // Rabies Patients
                 const orgRabies = allData[orgKey].rabiesPatients;
                 if (orgRabies) {
                     Object.keys(orgRabies).forEach(pKey => {
                         combinedRabies.push({ 
                             ...orgRabies[pKey], 
                             id: pKey,
-                            orgName: orgKey.replace(/_/g, ' ') 
+                            orgName: orgNameClean 
+                        });
+                    });
+                }
+
+                // Inventory Items
+                const orgInv = allData[orgKey].inventory;
+                if (orgInv) {
+                    Object.keys(orgInv).forEach(iKey => {
+                        combinedInventory.push({
+                            ...orgInv[iKey],
+                            id: iKey,
+                            orgName: orgNameClean
+                        });
+                    });
+                }
+
+                // Stores
+                const orgStores = allData[orgKey].stores;
+                if (orgStores) {
+                    Object.keys(orgStores).forEach(sKey => {
+                        combinedStores.push({
+                            ...orgStores[sKey],
+                            id: sKey
                         });
                     });
                 }
             });
+            
             setRabiesPatients(combinedRabies);
+            setInventoryItems(combinedInventory);
+            setStores(combinedStores);
         });
         unsubscribes.push(unsub);
     } else {

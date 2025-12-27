@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, User, Lock, LogIn, Eye, EyeOff, Loader2, AlertCircle, Info, Code } from 'lucide-react';
+import { Calendar, User, Lock, LogIn, Eye, EyeOff, Loader2, AlertCircle, Info, Code, ShieldAlert } from 'lucide-react';
 import { Input } from './Input';
 import { Select } from './Select';
 import { FISCAL_YEARS } from '../constants';
@@ -70,6 +70,26 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
       );
 
       if (foundUser) {
+          // Check if this organization has at least one ADMIN user
+          // Exception: Super Admins are always allowed to log in
+          const isSuperAdmin = foundUser.role === 'SUPER_ADMIN';
+          
+          if (!isSuperAdmin) {
+              const hasOrgAdmin = users.some(u => 
+                  u.organizationName === foundUser.organizationName && 
+                  u.role === 'ADMIN'
+              );
+
+              if (!hasOrgAdmin) {
+                  setErrors(prev => ({ 
+                      ...prev, 
+                      form: 'तपाईंको संस्थामा एडमिन प्रयोगकर्ता फेला परेन। लगइन अनुमति छैन। (Admin not found for your org. Login denied.)' 
+                  }));
+                  setIsLoading(false);
+                  return;
+              }
+          }
+
           onLoginSuccess(foundUser, formData.fiscalYear);
       } else {
           setErrors(prev => ({ 
@@ -87,9 +107,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ users, onLoginSuccess, ini
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {errors.form && (
-        <div className="bg-red-50 text-red-600 text-sm p-4 rounded-xl border border-red-100 flex items-center gap-3 animate-pulse">
-            <AlertCircle size={18} className="shrink-0" />
-            <span className="font-medium">{errors.form}</span>
+        <div className="bg-red-50 text-red-600 text-sm p-4 rounded-xl border border-red-100 flex items-start gap-3 animate-in slide-in-from-top-2 duration-300">
+            <ShieldAlert size={20} className="shrink-0 mt-0.5" />
+            <span className="font-bold leading-tight font-nepali">{errors.form}</span>
         </div>
       )}
 

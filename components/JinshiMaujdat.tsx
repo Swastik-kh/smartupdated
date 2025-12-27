@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Package, Calendar, Plus, RotateCcw, Save, X, CheckCircle2, Search, 
   ArrowUpCircle, ArrowDownCircle, Warehouse, DollarSign, Tag, ClipboardList, Barcode,
-  Hash, BookOpen, Layers, ScrollText, Store as StoreIcon, User, FileText, Filter, PieChart, Send, Info, Edit, Calculator, SlidersHorizontal, BarChart4, ChevronRight, History, CheckSquare, List
+  Hash, BookOpen, Layers, ScrollText, Store as StoreIcon, User, FileText, Filter, PieChart, Send, Info, Edit, Calculator, SlidersHorizontal, BarChart4, ChevronRight, History, CheckSquare, List, Building2
 } from 'lucide-react';
 import { Input } from './Input';
 import { Select } from './Select';
@@ -91,6 +91,12 @@ const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({ item, storeName, on
                             <p className="text-lg font-bold text-slate-800">{item.itemName}</p>
                             <p className="text-xs text-slate-500">{item.specification || 'No specification provided.'}</p>
                         </div>
+                        {item.orgName && (
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Sanstha/Org</label>
+                                <p className="font-bold text-indigo-700">{item.orgName}</p>
+                            </div>
+                        )}
                         <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase">Godam/Store</label>
                             <p className="font-medium">{storeName}</p>
@@ -775,6 +781,7 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
   const [filterStore, setFilterStore] = useState('');
   const [filterType, setFilterType] = useState(''); // Empty string = 'All'
   const [filterClass, setFilterClass] = useState('');
+  const [filterOrg, setFilterOrg] = useState(''); // New org filter for Super Admin
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedItemForEdit, setSelectedItemForEdit] = useState<InventoryItem | null>(null);
@@ -783,6 +790,8 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
 
   const [itemClassificationOptions, setItemClassificationOptions] = useState<Option[]>(initialItemClassificationOptions);
   const [receiptSourceOptions, setReceiptSourceOptions] = useState<Option[]>(initialReceiptSourceOptions);
+
+  const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
 
   useEffect(() => {
     if (pendingPoDakhila) {
@@ -793,6 +802,11 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
 
   const storeOptions: Option[] = useMemo(() => stores.map(s => ({ id: s.id, value: s.id, label: s.name })), [stores]);
 
+  const orgOptions = useMemo(() => {
+    const orgs = Array.from(new Set(inventoryItems.map(i => i.orgName).filter(Boolean)));
+    return [{ id: 'all', value: '', label: 'सबै संस्थाहरू (All Orgs)' }, ...orgs.map(org => ({ id: org!, value: org!, label: org! }))];
+  }, [inventoryItems]);
+
   const expendableCount = useMemo(() => inventoryItems.filter(i => i.itemType === 'Expendable').length, [inventoryItems]);
   const nonExpendableCount = useMemo(() => inventoryItems.filter(i => i.itemType === 'Non-Expendable').length, [inventoryItems]);
 
@@ -801,7 +815,8 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
     const matchesStore = filterStore ? item.storeId === filterStore : true;
     const matchesType = filterType ? item.itemType === filterType : true;
     const matchesClass = filterClass ? item.itemClassification === filterClass : true;
-    return matchesSearch && matchesStore && matchesType && matchesClass;
+    const matchesOrg = filterOrg ? item.orgName === filterOrg : true;
+    return matchesSearch && matchesStore && matchesType && matchesClass && matchesOrg;
   });
 
   const handleEditClick = (item: InventoryItem) => { setSelectedItemForEdit(item); setShowEditModal(true); };
@@ -845,8 +860,12 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
           </div>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
-            <button onClick={() => handleOpenBulkModal('opening')} className="flex-1 md:flex-none flex items-center gap-2 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors justify-center"><ArrowUpCircle size={18} /><span className="font-nepali">ओपनिङ्ग (Opening)</span></button>
-            <button onClick={() => handleOpenBulkModal('add')} className="flex-1 md:flex-none flex items-center gap-2 px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-lg text-sm font-medium shadow-sm transition-colors justify-center"><Plus size={18} /><span className="font-nepali">दाखिला (Add Stock)</span></button>
+            {!isSuperAdmin && (
+                <>
+                    <button onClick={() => handleOpenBulkModal('opening')} className="flex-1 md:flex-none flex items-center gap-2 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium shadow-sm transition-colors justify-center"><ArrowUpCircle size={18} /><span className="font-nepali">ओपनिङ्ग (Opening)</span></button>
+                    <button onClick={() => handleOpenBulkModal('add')} className="flex-1 md:flex-none flex items-center gap-2 px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-lg text-sm font-medium shadow-sm transition-colors justify-center"><Plus size={18} /><span className="font-nepali">दाखिला (Add Stock)</span></button>
+                </>
+            )}
         </div>
       </div>
 
@@ -885,11 +904,14 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
           </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${isSuperAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm`}>
           <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input type="text" placeholder="सामान, कोड खोज्नुहोस्..." className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 focus:border-indigo-500 outline-none text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
+          {isSuperAdmin && (
+              <Select label="संस्था फिल्टर" options={orgOptions} value={filterOrg} onChange={e => setFilterOrg(e.target.value)} placeholder="Filter by Organization" icon={<Building2 size={16} />} />
+          )}
           <Select label="स्टोर फिल्टर" options={[{id: 'all', value: '', label: 'All Stores'}, ...storeOptions]} value={filterStore} onChange={e => setFilterStore(e.target.value)} placeholder="Filter by Store" icon={<StoreIcon size={16} />} />
           <Select label="वर्गीकरण फिल्टर" options={[{id: 'all', value: '', label: 'All Classes'}, ...itemClassificationOptions]} value={filterClass} onChange={e => setFilterClass(e.target.value)} placeholder="Filter by Class" icon={<Tag size={16} />} />
       </div>
@@ -907,6 +929,7 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
                   <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                       <tr>
                           <th className="px-4 py-3 w-12 text-center">SN</th>
+                          {isSuperAdmin && <th className="px-4 py-3 w-32">Sanstha (Org)</th>}
                           <th className="px-4 py-3 min-w-[200px]">Item Name / Specification</th>
                           <th className="px-4 py-3 w-24">जि.खा.पा.नं</th>
                           <th className="px-4 py-3 w-32">Unique Code / Sanket</th>
@@ -921,13 +944,21 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                       {filteredItems.length === 0 ? (
-                          <tr><td colSpan={11} className="px-6 py-12 text-center text-slate-400 italic font-nepali text-base">माथि छानिएको प्रकारमा कुनै सामान भेटिएन। (No items found in this category.)</td></tr>
+                          <tr><td colSpan={isSuperAdmin ? 12 : 11} className="px-6 py-12 text-center text-slate-400 italic font-nepali text-base">माथि छानिएको प्रकारमा कुनै सामान भेटिएन। (No items found in this category.)</td></tr>
                       ) : (
                           filteredItems.map((item, index) => {
                               const storeName = storeOptions.find(s => s.value === item.storeId)?.label || 'Unknown';
                               return (
                                   <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                       <td className="px-4 py-3 text-center text-slate-500">{index + 1}</td>
+                                      {isSuperAdmin && (
+                                          <td className="px-4 py-3">
+                                              <div className="font-bold text-indigo-700 flex items-center gap-1">
+                                                  <Building2 size={12} className="text-indigo-400" />
+                                                  <span className="truncate max-w-[120px]">{item.orgName || 'N/A'}</span>
+                                              </div>
+                                          </td>
+                                      )}
                                       <td className="px-4 py-3">
                                           <div className="font-bold text-slate-800">{item.itemName}</div>
                                           <div className="text-[10px] text-slate-500 italic truncate max-w-[200px]">{item.specification || '-'}</div>
@@ -956,7 +987,7 @@ export const JinshiMaujdat: React.FC<JinshiMaujdatProps> = ({
                                       <td className="px-4 py-3 text-center">
                                           <div className="flex items-center justify-center gap-1">
                                               <button onClick={() => handleViewClick(item)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-full transition-all" title="Full Details"><Info size={16}/></button>
-                                              <button onClick={() => handleEditClick(item)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-full transition-all" title="Edit"><Edit size={16} /></button>
+                                              {!isSuperAdmin && <button onClick={() => handleEditClick(item)} className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-full transition-all" title="Edit"><Edit size={16} /></button>}
                                           </div>
                                       </td>
                                   </tr>

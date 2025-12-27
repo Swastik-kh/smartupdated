@@ -42,8 +42,15 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
   });
 
   const availableOrgs = useMemo(() => {
-    const orgs = Array.from(new Set(allUsers.map(u => u.organizationName))).filter(o => o !== currentUser.organizationName);
-    return orgs.map(o => ({ id: o, value: o, label: o }));
+    // Filter organizations that have at least one ADMIN user
+    const orgsWithAdmins = allUsers
+      .filter(u => u.role === 'ADMIN')
+      .map(u => u.organizationName);
+    
+    const uniqueOrgsWithAdmins = Array.from(new Set(orgsWithAdmins))
+      .filter(o => o !== currentUser.organizationName);
+
+    return uniqueOrgsWithAdmins.map(o => ({ id: o, value: o, label: o }));
   }, [allUsers, currentUser.organizationName]);
 
   const generateMagFormNo = (forms: MagFormEntry[], fy: string) => {
