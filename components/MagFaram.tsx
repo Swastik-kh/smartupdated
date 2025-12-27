@@ -201,6 +201,31 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
     if (isInstitutionalMode && !formDetails.targetOrg) { setValidationError("कृपया माग गर्ने संस्था छान्नुहोस्।"); return; }
     if (items.filter(i => i.name.trim() !== '').length === 0) { setValidationError("कृपया कम्तिमा एउटा सामानको नाम भर्नुहोस्।"); return; }
     
+    // --- NEW VALIDATION: STOCK CHECK DURING VERIFICATION ---
+    if (isVerifying && formDetails.storeKeeper?.status === 'stock') {
+        const insufficientItems: string[] = [];
+        
+        items.forEach(item => {
+            if (!item.name.trim()) return;
+            
+            // Calculate total available quantity across all stores in the organization
+            const totalAvailable = inventoryItems
+                .filter(i => i.itemName.trim().toLowerCase() === item.name.trim().toLowerCase())
+                .reduce((sum, i) => sum + (Number(i.currentQuantity) || 0), 0);
+            
+            const requestedQty = parseFloat(item.quantity) || 0;
+            
+            if (requestedQty > totalAvailable) {
+                insufficientItems.push(`${item.name} (मौज्दात: ${totalAvailable}, माग: ${requestedQty})`);
+            }
+        });
+
+        if (insufficientItems.length > 0) {
+            setValidationError(`मौज्दात अपर्याप्त छ! निम्न सामानहरू स्टोरमा पर्याप्त छैनन्:\n${insufficientItems.join('\n')}\n\nकृपया "बजारबाट खरिद" विकल्प रोज्नुहोस् वा मौज्दात मिलान गर्नुहोस्।`);
+            return;
+        }
+    }
+
     // Final check for duplicates if already pending/verified
     if (!isNewForm && (formDetails.status === 'Approved' || formDetails.status === 'Rejected')) {
         alert("यो फारम पहिले नै प्रोसेस भइसकेको छ।");
@@ -353,6 +378,17 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
             <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white hover:bg-slate-900 rounded-lg font-medium shadow-sm"><Printer size={18} /> प्रिन्ट</button>
           </div>
        </div>
+
+       {validationError && (
+           <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl flex items-start gap-3 no-print animate-in slide-in-from-top-2">
+               <AlertCircle className="text-red-500 mt-0.5 shrink-0" size={20} />
+               <div className="flex-1">
+                   <h4 className="font-bold text-red-800 text-sm font-nepali">त्रुटि (Error)</h4>
+                   <p className="text-red-700 text-sm font-nepali mt-1 whitespace-pre-wrap">{validationError}</p>
+               </div>
+               <button onClick={() => setValidationError(null)} className="text-red-400 hover:text-red-600"><X size={18} /></button>
+           </div>
+       )}
 
        <div id="mag-form-print" className="bg-white p-10 max-w-[210mm] mx-auto min-h-[297mm] font-nepali text-slate-900 print:p-0 print:shadow-none print:w-full border shadow-lg rounded-xl">
           <div className="text-right font-bold text-[10px] mb-2">म.ले.प.फारम नं: ४०१</div>
