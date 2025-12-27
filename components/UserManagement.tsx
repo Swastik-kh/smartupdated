@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserManagementProps, UserRole, Option } from '../types';
-import { Plus, Trash2, Shield, User as UserIcon, Building2, Save, X, Phone, Briefcase, IdCard, Users, Pencil, CheckSquare, Square, ChevronDown, ChevronRight, CornerDownRight, Store } from 'lucide-react';
+import { Plus, Trash2, Shield, User as UserIcon, Building2, Save, X, Phone, Briefcase, IdCard, Users, Pencil, CheckSquare, Square, ChevronDown, ChevronRight, CornerDownRight, Store, AlertCircle } from 'lucide-react';
 import { Input } from './Input';
 import { Select } from './Select';
 
@@ -63,6 +63,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<{
     username: string;
@@ -101,6 +102,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
   const handleAddNew = () => {
     setEditingId(null);
+    setErrorMsg(null);
     setFormData({ 
       username: '', 
       password: '', 
@@ -116,6 +118,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
   const handleEditClick = (user: User) => {
     setEditingId(user.id);
+    setErrorMsg(null);
     setFormData({
       username: user.username, 
       password: user.password, 
@@ -153,6 +156,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canManageUsers) return;
+    setErrorMsg(null);
+
+    const trimmedUsername = formData.username.trim().toLowerCase();
+
+    // GLOBAL USERNAME VALIDATION:
+    // Check if the username already exists in ANY organization
+    const isDuplicate = users.some(u => 
+        u.username.toLowerCase() === trimmedUsername && u.id !== editingId
+    );
+
+    if (isDuplicate) {
+        setErrorMsg(`प्रयोगकर्ता नाम "${formData.username}" प्रणालीमा पहिले नै दर्ता छ। कृपया अर्को नाम छान्नुहोस्। (Username already exists in the system)`);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+    }
 
     // Ensure dashboard and change_password are always included
     const finalMenus = Array.from(new Set([...formData.allowedMenus, 'dashboard', 'change_password']));
@@ -206,6 +224,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({
               <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-red-500 p-1 rounded-full hover:bg-red-50 transition-all"><X size={24} /></button>
           </div>
 
+          {errorMsg && (
+              <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl flex items-start gap-3 animate-pulse">
+                  <AlertCircle className="text-red-600 shrink-0 mt-0.5" size={20} />
+                  <div>
+                      <h4 className="font-bold text-red-800 text-sm font-nepali">सुरक्षा सतर्कता (Warning)</h4>
+                      <p className="text-red-700 text-sm font-nepali mt-1">{errorMsg}</p>
+                  </div>
+              </div>
+          )}
+
           <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
             <Input label="पूरा नाम (Full Name)" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} required icon={<IdCard size={18} />} />
             <Input label="पद (Designation)" value={formData.designation} onChange={e => setFormData({...formData, designation: e.target.value})} required icon={<Briefcase size={18} />} />
@@ -228,7 +256,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                     icon={<Users size={18} />} 
                 />
             )}
-            <Input label="प्रयोगकर्ताको नाम (Username)" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required icon={<UserIcon size={18} />} />
+            <div className="relative">
+                <Input 
+                    label="प्रयोगकर्ताको नाम (Username)" 
+                    value={formData.username} 
+                    onChange={e => setFormData({...formData, username: e.target.value})} 
+                    required 
+                    icon={<UserIcon size={18} />} 
+                    error={errorMsg ? 'Invalid Username' : undefined}
+                />
+                <p className="text-[10px] text-slate-400 mt-1 italic">Username must be unique across all institutions.</p>
+            </div>
             <Input label="पासवर्ड (Password)" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} required type="password" />
             
             <div className="md:col-span-2 mt-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
