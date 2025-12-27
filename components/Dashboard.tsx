@@ -580,9 +580,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               {expiryModalTab === 'expired' ? 'म्याद समाप्त भएका सामानहरू' : '३ महिनाभित्र म्याद सकिने सामानहरू'}
                           </h3>
                       </div>
-                      <button onClick={() => setShowExpiryModal(false)} className="p-2 hover:bg-white rounded-full"><X size={20}/></button>
+                      <div className="flex gap-2">
+                          <button onClick={() => window.print()} className="p-2 bg-white/50 hover:bg-white text-slate-700 rounded-lg transition-colors" title="Print List">
+                              <Printer size={20} />
+                          </button>
+                          <button onClick={() => setShowExpiryModal(false)} className="p-2 hover:bg-white rounded-full"><X size={20}/></button>
+                      </div>
                   </div>
-                  <div className="flex p-2 bg-slate-100 gap-1">
+                  <div className="flex p-2 bg-slate-100 gap-1 no-print">
                       <button 
                           onClick={() => setExpiryModalTab('soon')} 
                           className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${expiryModalTab === 'soon' ? 'bg-white shadow-sm text-orange-600' : 'text-slate-500'}`}
@@ -621,6 +626,61 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               )}
                           </tbody>
                       </table>
+                  </div>
+
+                  {/* PRINT-ONLY VERSION OF EXPIRY LIST */}
+                  <div className="hidden print:block fixed inset-0 bg-white z-[9999] p-10 font-nepali">
+                      <div className="text-center mb-8">
+                          <h1 className="text-xl font-bold">{generalSettings.orgNameNepali}</h1>
+                          <h2 className="text-lg font-bold">{generalSettings.subTitleNepali}</h2>
+                          <div className="text-sm mt-2">{generalSettings.address} | फोन: {generalSettings.phone}</div>
+                          <div className="mt-8 border-b-2 border-slate-800 pb-2">
+                              <h3 className="text-lg font-black underline underline-offset-4">
+                                  {expiryModalTab === 'expired' ? 'म्याद समाप्त भएका सामानहरूको सूची' : '३ महिनाभित्र म्याद सकिने सामानहरूको सूची'}
+                              </h3>
+                              <p className="text-xs mt-2 font-bold text-slate-500 uppercase tracking-widest">Expiry Alert Report</p>
+                          </div>
+                      </div>
+                      
+                      <table className="w-full border-collapse border border-slate-800 text-xs text-center mt-4">
+                          <thead>
+                              <tr className="bg-slate-50 font-bold">
+                                  <th className="border border-slate-800 p-2 w-12">क्र.सं.</th>
+                                  <th className="border border-slate-800 p-2 text-left">सामानको नाम</th>
+                                  <th className="border border-slate-800 p-2">ब्याच नं. (Batch)</th>
+                                  <th className="border border-slate-800 p-2">म्याद सकिने मिति (BS)</th>
+                                  <th className="border border-slate-800 p-2">मौज्दात</th>
+                                  <th className="border border-slate-800 p-2">एकाई</th>
+                                  <th className="border border-slate-800 p-2">स्टोर/गोदाम</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              {(expiryModalTab === 'expired' ? stats.alreadyExpiredItems : stats.expiringSoonItems).map((item, idx) => (
+                                  <tr key={item.id}>
+                                      <td className="border border-slate-800 p-2">{idx + 1}</td>
+                                      <td className="border border-slate-800 p-2 text-left font-bold">{item.itemName}</td>
+                                      <td className="border border-slate-800 p-2 font-mono">{item.batchNo || '-'}</td>
+                                      <td className="border border-slate-800 p-2 font-bold text-red-600">{item.expiryDateBs}</td>
+                                      <td className="border border-slate-800 p-2 font-bold">{item.currentQuantity}</td>
+                                      <td className="border border-slate-800 p-2">{item.unit}</td>
+                                      <td className="border border-slate-800 p-2">{stores.find(s => s.id === item.storeId)?.name || '-'}</td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+
+                      <div className="grid grid-cols-2 mt-20 gap-20">
+                          <div className="text-center">
+                              <div className="border-t border-slate-800 pt-1 font-bold">तयार गर्ने</div>
+                              <div className="text-xs mt-1">{currentUser.fullName}</div>
+                          </div>
+                          <div className="text-center">
+                              <div className="border-t border-slate-800 pt-1 font-bold">स्वीकृत गर्ने</div>
+                          </div>
+                      </div>
+                      <div className="mt-20 text-[8px] text-slate-400 text-center uppercase tracking-widest italic">
+                          Generated on: {new NepaliDate().format('YYYY-MM-DD HH:mm')} | {APP_NAME}
+                      </div>
                   </div>
               </div>
           </div>
