@@ -47,8 +47,7 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
   }, [allUsers, currentUser.organizationName]);
 
   const generateMagFormNo = (forms: MagFormEntry[], fy: string) => {
-    // CRITICAL: Only filter forms where this organization is the SOURCE.
-    // Received institutional forms from other orgs should NOT affect this org's sequence.
+    // Only filter forms where this organization is the SOURCE.
     const mySourceForms = forms.filter(f => 
         f.fiscalYear === fy && 
         (f.sourceOrg === currentUser.organizationName || !f.sourceOrg)
@@ -111,6 +110,7 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
   // STRICTOR ROLE DEFINITIONS for action filtering
   const isStrictStoreKeeper = currentUser.role === 'STOREKEEPER';
   const isAdminOrApproval = ['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role);
+  const isStaff = currentUser.role === 'STAFF';
   
   // For permission to actually perform the action in the form
   const canVerify = isStrictStoreKeeper || ['ADMIN', 'SUPER_ADMIN'].includes(currentUser.role);
@@ -123,26 +123,33 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
 
   // Actionable: ONLY Storekeeper sees Pending. Admins see Verified.
   const actionableForms = useMemo(() => {
-      // 1. Storekeeper strictly sees forms waiting for verification
-      if (currentUser.role === 'STOREKEEPER') {
+      if (isStrictStoreKeeper) {
           return existingForms.filter(f => f.status === 'Pending').sort((a, b) => b.id.localeCompare(a.id));
       }
-      // 2. Admin/Approver strictly sees forms that are already verified and waiting for final approval
-      if (['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) {
+      if (isAdminOrApproval) {
           return existingForms.filter(f => f.status === 'Verified').sort((a, b) => b.id.localeCompare(a.id));
       }
       return [];
-  }, [existingForms, currentUser.role]);
+  }, [existingForms, isStrictStoreKeeper, isAdminOrApproval]);
 
   const historyForms = useMemo(() => {
-      const myForms = existingForms.filter(f => f.sourceOrg === currentUser.organizationName);
-      // History shows official records (Approved/Rejected) for all administrative roles
+      // 1. All forms belonging to this organization
+      let myOrgForms = existingForms.filter(f => f.sourceOrg === currentUser.organizationName);
+      
+      // 2. PRIVACY FILTER: If user is STAFF, only show their OWN forms
+      if (isStaff) {
+          myOrgForms = myOrgForms.filter(f => f.demandBy?.name === currentUser.fullName);
+      }
+
+      // 3. Management History: Management roles see Approved/Rejected within the org 
+      // (Already handled by myOrgForms, but we ensure they see official history for audit)
       const officialHistory = (isAdminOrApproval || isStrictStoreKeeper)
-          ? existingForms.filter(f => f.status === 'Approved' || f.status === 'Rejected')
+          ? existingForms.filter(f => (f.status === 'Approved' || f.status === 'Rejected'))
           : [];
-      const combined = [...new Map([...myForms, ...officialHistory].map(item => [item.id, item])).values()];
+
+      const combined = [...new Map([...myOrgForms, ...officialHistory].map(item => [item.id, item])).values()];
       return combined.sort((a, b) => b.id.localeCompare(a.id));
-  }, [existingForms, isAdminOrApproval, isStrictStoreKeeper, currentUser.organizationName]);
+  }, [existingForms, isStaff, isAdminOrApproval, isStrictStoreKeeper, currentUser.organizationName, currentUser.fullName]);
 
   const itemOptions = useMemo(() => inventoryItems.map(item => {
     const typeLabel = item.itemType === 'Expendable' ? 'खर्च हुने' : 'खर्च नहुने';
@@ -258,7 +265,6 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
       let updatedStoreKeeper = { ...formDetails.storeKeeper };
       let updatedApprovedBy = { ...formDetails.approvedBy };
 
-      // Hide specific name and show "REJECTED" based on who is rejecting
       if (isVerifying) {
           updatedStoreKeeper.name = "अस्वीकृत (REJECTED)";
       } else if (isApproving) {
@@ -268,7 +274,6 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
               date: todayBS
           };
       } else {
-          // General fallback
           updatedApprovedBy = {
               name: "अस्वीकृत (REJECTED)",
               designation: "",
@@ -280,7 +285,7 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
           ...formDetails,
           status: 'Rejected',
           rejectionReason: rejectReason,
-          isViewedByRequester: false, // Notify requester
+          isViewedByRequester: false, 
           storeKeeper: updatedStoreKeeper,
           approvedBy: updatedApprovedBy
       };
@@ -295,7 +300,6 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
     let nextStatus = formDetails.status || 'Pending';
     let nextIsViewed = true;
 
-    // Track original signature objects
     let updatedStoreKeeper = { ...formDetails.storeKeeper };
     let updatedApprovedBy = { ...formDetails.approvedBy };
 
@@ -303,13 +307,11 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
         if (isVerifying) {
             nextStatus = 'Verified';
             nextIsViewed = false;
-            // Record who verified
             updatedStoreKeeper.name = currentUser.fullName;
         }
         else if (isApproving) {
             nextStatus = 'Approved';
             nextIsViewed = false;
-            // Record who approved
             updatedApprovedBy = {
                 name: currentUser.fullName,
                 designation: currentUser.designation,
