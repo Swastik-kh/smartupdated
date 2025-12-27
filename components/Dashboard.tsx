@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Syringe, Activity, 
   ClipboardList, FileSpreadsheet, FilePlus, ShoppingCart, FileOutput, 
   BookOpen, Book, Archive, RotateCcw, Wrench, Scroll, BarChart3,
-  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User, Printer, SearchX, AlertOctagon, GraduationCap, Award, Search, Eye, Award as AwardIcon, Download
+  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User, Printer, SearchX, AlertOctagon, GraduationCap, Award, Search, Eye, Award as AwardIcon, Download, TrendingDown, Clipboard, Beaker, ArrowRightLeft, Droplets
 } from 'lucide-react';
 import { APP_NAME, ORG_NAME, FISCAL_YEARS } from '../constants';
 import { DashboardProps, PurchaseOrderEntry, InventoryItem, RabiesPatient, HafaEntry } from '../types'; 
@@ -102,13 +102,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showCompletedModal, setShowCompletedModal] = useState(false);
+  const [showForecastModal, setShowForecastModal] = useState(false); 
   const [completedSearchTerm, setCompletedSearchTerm] = useState('');
   const [selectedReportPatient, setSelectedReportPatient] = useState<RabiesPatient | null>(null);
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [expiryModalTab, setExpiryModalTab] = useState<'soon' | 'expired'>('soon');
   const [lastSeenNotificationId, setLastSeenNotificationId] = useState<string | null>(null);
   
-  // New state for certificate
   const [selectedCertificatePatient, setSelectedCertificatePatient] = useState<RabiesPatient | null>(null);
 
   const latestApprovedDakhila = useMemo(() => {
@@ -121,12 +121,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const handleNotificationClick = () => {
       if (latestApprovedDakhila) {
-          setLastSeenNotificationId(latestApprovedDakhila.id);
           setShowNotificationModal(true);
+          setLastSeenNotificationId(latestApprovedDakhila.id);
       }
   };
 
-  // --- NOTIFICATION CALCULATIONS ---
   const isApprover = ['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role);
   const isStorekeeper = currentUser.role === 'STOREKEEPER';
 
@@ -142,20 +141,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const pendingHafaCount = useMemo(() => {
     const myOrg = currentUser.organizationName.trim().toLowerCase();
-    
-    // 1. Outgoing Pending: Sent from my org, needs my side's approval
-    const outgoingPending = hafaEntries.filter(e => 
-      e.sourceOrg?.trim().toLowerCase() === myOrg && 
-      e.status === 'Pending'
-    ).length;
-
-    // 2. Incoming Pending: Sent to my org, needs me to "Receive" it
-    const incomingPending = hafaEntries.filter(e => 
-      e.recipientOrg?.trim().toLowerCase() === myOrg && 
-      e.status === 'Approved' && 
-      !e.recipientApprovedBy?.name
-    ).length;
-
+    const outgoingPending = hafaEntries.filter(e => e.sourceOrg?.trim().toLowerCase() === myOrg && e.status === 'Pending').length;
+    const incomingPending = hafaEntries.filter(e => e.recipientOrg?.trim().toLowerCase() === myOrg && e.status === 'Approved' && !e.recipientApprovedBy?.name).length;
     return outgoingPending + incomingPending;
   }, [hafaEntries, currentUser.organizationName]);
 
@@ -187,7 +174,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const todayStr = today.format('YYYY-MM-DD'); 
     const todayAd = new Date();
     const todayAdStr = todayAd.toISOString().split('T')[0];
-    
     const threeMonthsLaterAd = new Date();
     threeMonthsLaterAd.setMonth(todayAd.getMonth() + 3);
     
@@ -196,6 +182,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     let scheduledToday = 0;
     let visitedToday = 0;
     let totalOverdueCount = 0;
+    let pendingRabiesDosesCount = 0;
     const patientsForToday: Array<{patient: RabiesPatient, doseDay: number, status: string, scheduledDate: string, isOverdue: boolean}> = [];
     const completedPatients: RabiesPatient[] = [];
 
@@ -205,6 +192,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         if (isCompleted) { completedPatients.push(patient); }
 
         schedule.forEach(dose => {
+            if (dose.status === 'Pending') pendingRabiesDosesCount++;
+
             const isScheduledToday = dose.date === todayAdStr;
             const isOverdue = dose.date < todayAdStr && dose.status === 'Pending';
             const isGivenToday = dose.status === 'Given' && (dose.givenDate === todayAdStr);
@@ -224,6 +213,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
 
     const myOrgInventory = inventoryItems.filter(item => currentUser.role === 'SUPER_ADMIN' || !item.orgName || item.orgName === currentUser.organizationName);
+    
+    // Rabies Vaccine Logic - Refined with Volume calculation (0.2ml/dose)
+    const rabiesVaccineItems = myOrgInventory.filter(item => 
+        item.itemName.toLowerCase().includes('rabies') || 
+        item.itemName.toLowerCase().includes('arv')
+    );
+
+    const stock05ml = rabiesVaccineItems
+        .filter(item => item.itemName.includes('0.5') || (item.specification && item.specification.includes('0.5')))
+        .reduce((sum, item) => sum + (item.currentQuantity || 0), 0);
+
+    const stock1ml = rabiesVaccineItems
+        .filter(item => item.itemName.includes('1') && !item.itemName.includes('0.5') || (item.specification && item.specification.includes('1') && !item.specification.includes('0.5')))
+        .reduce((sum, item) => sum + (item.currentQuantity || 0), 0);
+
+    const totalMlAvailable = (stock05ml * 0.5) + (stock1ml * 1.0);
+    const totalMlRequired = pendingRabiesDosesCount * 0.2; // 0.2ml per dose rule
+    const totalVials = stock05ml + stock1ml;
+
     const expiringSoonItems = myOrgInventory.filter(item => {
         if (!item.expiryDateAd || item.currentQuantity <= 0) return false;
         const expiryDate = new Date(item.expiryDateAd);
@@ -235,7 +243,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
         return expiryDate <= todayAd;
     });
     
-    return { todayRabiesReg, scheduledToday, visitedToday, totalOverdueCount, patientsForToday, completedPatients, expiringSoonItems, alreadyExpiredItems, totalInventory: myOrgInventory.length, pendingMagForms: magForms.filter(f => f.status === 'Pending').length, pendingStockReq: stockEntryRequests.filter(r => r.status === 'Pending').length };
+    return { 
+        todayRabiesReg, 
+        scheduledToday, 
+        visitedToday, 
+        totalOverdueCount, 
+        patientsForToday, 
+        completedPatients, 
+        expiringSoonItems, 
+        alreadyExpiredItems, 
+        totalInventory: myOrgInventory.length, 
+        pendingMagForms: magForms.filter(f => f.status === 'Pending').length, 
+        pendingStockReq: stockEntryRequests.filter(r => r.status === 'Pending').length,
+        pendingRabiesDosesCount,
+        stock05ml,
+        stock1ml,
+        totalMlAvailable,
+        totalMlRequired,
+        totalVials
+    };
   }, [rabiesPatients, inventoryItems, magForms, stockEntryRequests, currentUser]);
 
   const filteredCompletedPatients = useMemo(() => {
@@ -265,7 +291,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             { id: 'mag_faram', label: 'माग फारम', icon: <FilePlus size={16} />, count: pendingMagCount }, 
             { id: 'kharid_adesh', label: 'खरिद आदेश', icon: <ShoppingCart size={16} /> }, 
             { id: 'nikasha_pratibedan', label: 'निकासा प्रतिवेदन', icon: <FileOutput size={16} />, count: pendingNikashaCount },
-            { id: 'hafa_faram', label: 'हा.फा. फारम', icon: <ArrowRightCircle size={16} />, count: pendingHafaCount },
+            { id: 'hafa_faram', label: 'हा.फा. फारम', icon: <ArrowRightLeft size={16} />, count: pendingHafaCount },
             { id: 'jinshi_firta_khata', label: 'जिन्सी फिर्ता फारम', icon: <RotateCcw size={16} />, count: pendingReturnCount },
             { id: 'marmat_adesh', label: 'मर्मत आदेश', icon: <Wrench size={16} />, count: pendingMarmatCount },
             { id: 'jinshi_khata', label: 'जिन्सी खाता', icon: <Book size={16} /> },
@@ -304,7 +330,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4 no-print">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4 no-print">
                 <div className="bg-white p-5 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-all group">
                     <div className="flex justify-between items-start">
                         <div><h3 className="text-2xl font-black text-slate-800">{stats.todayRabiesReg}</h3><p className="text-[10px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">आजको दर्ता</p></div>
@@ -317,6 +343,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         <div className={`p-2.5 rounded-xl transition-colors ${stats.totalOverdueCount > 0 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'} group-hover:bg-emerald-600 group-hover:text-white`}><CalendarCheck size={18} /></div>
                     </div>
                 </div>
+
+                <div onClick={() => setShowForecastModal(true)} className={`bg-white p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all group cursor-pointer active:scale-95 ${stats.totalMlAvailable < stats.totalMlRequired ? 'border-red-200 bg-red-50/10' : 'border-blue-100'}`}>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <div className="flex items-baseline gap-1">
+                                <h3 className={`text-2xl font-black ${stats.totalMlAvailable < stats.totalMlRequired ? 'text-red-600' : 'text-primary-600'}`}>
+                                    {stats.pendingRabiesDosesCount}
+                                </h3>
+                                <span className="text-slate-400 font-bold text-sm">बाँकी</span>
+                            </div>
+                            <p className="text-[10px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">खोप आवश्यकता</p>
+                        </div>
+                        <div className={`p-2.5 rounded-xl transition-colors ${stats.totalMlAvailable < stats.totalMlRequired ? 'bg-red-100 text-red-600' : 'bg-primary-50 text-primary-600'} group-hover:bg-primary-600 group-hover:text-white`}><TrendingDown size={18} /></div>
+                    </div>
+                </div>
+
                 <div onClick={() => setShowCompletedModal(true)} className="bg-white p-5 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition-all group cursor-pointer active:scale-95">
                     <div className="flex justify-between items-start">
                         <div><h3 className="text-2xl font-black text-blue-600">{stats.completedPatients.length}</h3><p className="text-[10px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">खोप पुरा गरेका</p></div>
@@ -430,6 +472,92 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </header>
         <main className="flex-1 custom-scrollbar bg-slate-50/30 p-4 md:p-6 print:p-0 print:bg-white print:overflow-visible"><div className="max-w-7xl mx-auto pb-20 print:pb-0">{renderContent()}</div></main>
       </div>
+
+      {/* --- VACCINE FORECAST MODAL --- */}
+      {showForecastModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowForecastModal(false)}></div>
+              <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col animate-in zoom-in-95">
+                  <div className="px-8 py-6 border-b bg-primary-600 flex justify-between items-center text-white">
+                      <div className="flex items-center gap-3">
+                          <TrendingDown size={24} />
+                          <h3 className="font-black font-nepali text-lg">खोप आवश्यकता प्रक्षेपण (ARV Forecast)</h3>
+                      </div>
+                      <button onClick={() => setShowForecastModal(false)} className="p-2 hover:bg-white/20 rounded-full"><X size={20}/></button>
+                  </div>
+                  <div className="p-8 space-y-6">
+                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <Warehouse size={12}/> Current Inventory Status (in ml)
+                          </p>
+                          <div className="grid grid-cols-2 gap-4">
+                              <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
+                                  <h4 className="text-2xl font-black text-slate-800">{stats.stock05ml}</h4>
+                                  <p className="text-[10px] font-bold text-indigo-600 uppercase mt-1">0.5 ml Vials</p>
+                                  <p className="text-[9px] text-slate-400">({(stats.stock05ml * 0.5).toFixed(1)} ml)</p>
+                              </div>
+                              <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
+                                  <h4 className="text-2xl font-black text-slate-800">{stats.stock1ml}</h4>
+                                  <p className="text-[10px] font-bold text-indigo-600 uppercase mt-1">1 ml Vials</p>
+                                  <p className="text-[9px] text-slate-400">({(stats.stock1ml * 1.0).toFixed(1)} ml)</p>
+                              </div>
+                          </div>
+                          <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center">
+                              <span className="text-xs font-bold text-slate-500 uppercase">Total Volume Available:</span>
+                              <span className="text-xl font-black text-slate-800">{stats.totalMlAvailable.toFixed(1)} ml</span>
+                          </div>
+                      </div>
+
+                      <div className="bg-orange-50 p-6 rounded-2xl border border-orange-200">
+                          <div className="flex justify-between items-center mb-4">
+                             <div>
+                                <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-1">Future Demand (0.2ml/dose)</p>
+                                <h4 className="text-3xl font-black text-orange-700">{stats.totalMlRequired.toFixed(1)} ml</h4>
+                                <p className="text-[10px] font-bold text-orange-600">for {stats.pendingRabiesDosesCount} Pending Doses</p>
+                             </div>
+                             <div className="p-4 bg-orange-100 rounded-2xl text-orange-600">
+                                <Droplets size={32} />
+                             </div>
+                          </div>
+                          <div className="space-y-2 border-t border-orange-100 pt-3">
+                              <p className="text-[10px] text-orange-800 flex justify-between"><span>Minimum 1ml Vials Needed:</span> <span className="font-bold">{Math.ceil(stats.totalMlRequired)} Vials</span></p>
+                              <p className="text-[10px] text-orange-800 flex justify-between"><span>Minimum 0.5ml Vials Needed:</span> <span className="font-bold">{Math.ceil(stats.totalMlRequired / 0.5)} Vials</span></p>
+                          </div>
+                      </div>
+
+                      <div className={`p-6 rounded-2xl border flex items-center gap-4 ${
+                          stats.totalMlAvailable >= stats.totalMlRequired 
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                          : 'bg-red-50 border-red-200 text-red-800'
+                      }`}>
+                          <div className={`p-3 rounded-xl ${stats.totalMlAvailable >= stats.totalMlRequired ? 'bg-emerald-100' : 'bg-red-100'}`}>
+                              {stats.totalMlAvailable >= stats.totalMlRequired 
+                                ? <CheckCircle2 size={24} /> 
+                                : <AlertTriangle size={24} />
+                              }
+                          </div>
+                          <div>
+                              <h4 className="font-black text-sm uppercase tracking-tight">Status: {stats.totalMlAvailable >= stats.totalMlRequired ? 'Stock Sufficient' : 'Stock Critical'}</h4>
+                              <p className="text-xs font-bold font-nepali mt-1 leading-relaxed">
+                                  {stats.totalMlAvailable >= stats.totalMlRequired 
+                                    ? 'हालको बिरामीहरूको बाँकी डोज पुरा गर्न मौज्दात पर्याप्त छ।' 
+                                    : `अपुग: ${(stats.totalMlRequired - stats.totalMlAvailable).toFixed(1)} ml औषधि तत्काल अर्डर गर्न आवश्यक छ।`
+                                  }
+                              </p>
+                          </div>
+                      </div>
+
+                      <div className="bg-slate-50 p-4 rounded-xl text-[10px] text-slate-500 font-medium italic leading-relaxed">
+                        <Info size={12} className="inline mr-1" />
+                        गणना आधार: १ डोज बराबर ०.२ ml खपत। ०.५ ml भायल = २.५ डोज, १ ml भायल = ५ डोज।
+                      </div>
+                  </div>
+                  <div className="p-4 bg-slate-50 border-t flex justify-end">
+                      <button onClick={() => setShowForecastModal(false)} className="bg-slate-800 text-white px-8 py-3 rounded-xl text-sm font-black shadow-lg hover:bg-black transition-colors">Close</button>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* --- ATTENDANCE MODAL --- */}
       {showAttendanceModal && (
@@ -566,7 +694,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <VaccineCertificate patient={selectedCertificatePatient} generalSettings={generalSettings} />
                   </div>
               </div>
-              {/* Hidden Print Container for layout control */}
               <div className="hidden print:block fixed inset-0 bg-white z-[9999]">
                   <VaccineCertificate patient={selectedCertificatePatient} generalSettings={generalSettings} />
               </div>
@@ -595,13 +722,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <div className="flex p-2 bg-slate-100 gap-1 no-print">
                       <button 
                           onClick={() => setExpiryModalTab('soon')} 
-                          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${expiryModalTab === 'soon' ? 'bg-white shadow-sm text-orange-600' : 'text-slate-500'}`}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${expiryModalTab === 'soon' ? 'bg-white shadow-sm text-orange-600' : 'text-slate-50'}`}
                       >
                           Expiring Soon ({stats.expiringSoonItems.length})
                       </button>
                       <button 
                           onClick={() => setExpiryModalTab('expired')} 
-                          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${expiryModalTab === 'expired' ? 'bg-white shadow-sm text-red-600' : 'text-slate-500'}`}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${expiryModalTab === 'expired' ? 'bg-white shadow-sm text-red-600' : 'text-slate-50'}`}
                       >
                           Expired ({stats.alreadyExpiredItems.length})
                       </button>
@@ -633,7 +760,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       </table>
                   </div>
 
-                  {/* PRINT-ONLY VERSION OF EXPIRY LIST */}
                   <div className="hidden print:block fixed inset-0 bg-white z-[9999] p-10 font-nepali">
                       <div className="text-center mb-8">
                           <h1 className="text-xl font-bold">{generalSettings.orgNameNepali}</h1>
