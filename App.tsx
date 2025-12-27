@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { LoginForm } from './components/LoginForm';
 import { Dashboard } from './components/Dashboard';
 import { APP_NAME, ORG_NAME } from './constants';
-import { ShieldCheck, Box } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { User, OrganizationSettings, MagFormEntry, RabiesPatient, PurchaseOrderEntry, IssueReportEntry, FirmEntry, QuotationEntry, InventoryItem, Store, StockEntryRequest, DakhilaPratibedanEntry, ReturnEntry, MarmatEntry, DhuliyaunaEntry, LogBookEntry, DakhilaItem, TBPatient, HafaEntry, HafaItem } from './types';
 import { db } from './firebase';
 import { ref, onValue, set, remove, update, get, Unsubscribe } from "firebase/database";
@@ -41,6 +41,7 @@ const DEFAULT_ADMIN: User = {
 
 const STORAGE_KEY_USER = 'smart_inventory_active_user';
 const STORAGE_KEY_FY = 'smart_inventory_active_fy';
+const LOGO_URL = "https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6";
 
 const App: React.FC = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]); 
@@ -274,11 +275,11 @@ const App: React.FC = () => {
           <div className="w-full max-w-[420px] animate-in fade-in zoom-in-95 duration-500">
             <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200">
               <div className="bg-primary-600 p-10 text-center text-white">
-                <div className="bg-white/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/30">
-                    <Box size={32} />
+                <div className="bg-white w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/30 overflow-hidden p-2">
+                    <img src={LOGO_URL} alt="App Logo" className="w-full h-full object-contain" />
                 </div>
                 <h1 className="text-3xl font-bold font-nepali tracking-tight">{APP_NAME}</h1>
-                <p className="text-sm font-nepali text-primary-100 mt-1">जिन्सी व्यवस्थापन अब तपाइँको हातमा</p>
+                <p className="text-[13px] font-nepali text-primary-100 mt-1 opacity-90">जिन्सी व्यवस्थापन अब तपाइँको हातमा</p>
                 <p className="text-primary-200 text-[10px] mt-2 uppercase font-bold tracking-widest opacity-60">Login Portal</p>
               </div>
               <div className="p-8">
