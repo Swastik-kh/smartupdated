@@ -184,6 +184,12 @@ export interface HafaEntry {
   decisionNo: string;
   decisionDate: string;
   recipientOrg: string;
+  sourceOrg?: string;
+  sourceOrgDetails?: {
+    name: string;
+    subTitle?: string;
+    address?: string;
+  };
   itemType: 'Expendable' | 'Non-Expendable';
   items: HafaItem[];
   preparedBy: Signature;
@@ -478,6 +484,7 @@ export interface DashboardProps {
   
   hafaEntries: HafaEntry[];
   onSaveHafaEntry: (entry: HafaEntry) => void;
+  onDeleteHafaEntry: (id: string) => void;
 
   purchaseOrders: PurchaseOrderEntry[];
   onUpdatePurchaseOrder: (order: PurchaseOrderEntry) => void; 

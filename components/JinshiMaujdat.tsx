@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Package, Calendar, Plus, RotateCcw, Save, X, CheckCircle2, Search, 
   ArrowUpCircle, ArrowDownCircle, Warehouse, DollarSign, Tag, ClipboardList, Barcode,
-  Hash, BookOpen, Layers, ScrollText, Store as StoreIcon, User, FileText, Filter, PieChart, Send, Info, Edit, Calculator, SlidersHorizontal, BarChart4, ChevronRight, History, CheckSquare, List, Building2
+  Hash, BookOpen, Layers, ScrollText, Store as StoreIcon, User, FileText, Filter, PieChart, Send, Info, Edit, Calculator, SlidersHorizontal, BarChart4, ChevronRight, History, CheckSquare, List, Building2, Loader2
 } from 'lucide-react';
 import { Input } from './Input';
 import { Select } from './Select';
@@ -376,7 +376,6 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                 const rt = parseFloat(poItem.rate?.toString() || '0') || 0;
                 
                 // INTELLIGENT MATCHING: Check if this item already exists in inventory
-                // We check globally first to get meta-data (Code, Type, Classification)
                 const existingInfo = inventoryItems.find(i => 
                     i.itemName.trim().toLowerCase() === poItem.name.trim().toLowerCase()
                 );
@@ -576,6 +575,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
 
     const handleSaveBulk = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSaving) return;
         setValidationError(null);
         setIsSaving(true);
         const dateBs = commonDetails.dateBs.trim();
@@ -658,9 +658,12 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
         if (hasError) { setIsSaving(false); return; }
         if (validatedItems.length === 0) { setValidationError('कृपया कम्तिमा एउटा सामानको विवरण भर्नुहोस्।'); setIsSaving(false); return; }
 
-        await onSave(validatedItems, commonDetails.receiptSource, commonDetails.dateBs, commonDetails.dateAd, commonDetails.storeId, commonDetails.supplier, commonDetails.refNo, commonDetails.dakhilaNo, mode);
-        setIsSaving(false);
-        onClose(); 
+        try {
+            await onSave(validatedItems, commonDetails.receiptSource, commonDetails.dateBs, commonDetails.dateAd, commonDetails.storeId, commonDetails.supplier, commonDetails.refNo, commonDetails.dakhilaNo, mode);
+            onClose(); 
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const modalTitle = mode === 'opening' ? 'ओपनिङ्ग स्टक राख्नुहोस् (Add Opening Stock)' : 'बल्कमा स्टक थप्नुहोस् (Add Stock in Bulk)';
@@ -675,7 +678,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => !isSaving && onClose()}></div>
             <div className="relative bg-white rounded-2xl shadow-2xl w-full h-full max-w-full overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
                 <div className={`px-6 py-4 border-b border-slate-100 flex justify-between items-center ${headerBgClass}`}>
                     <div className="flex items-center gap-3">
@@ -685,7 +688,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                             <p className="text-xs text-slate-500">{mode === 'opening' ? 'यो आर्थिक वर्षको लागि सुरुवाती स्टक प्रविष्ट गर्नुहोस्।' : 'एकै पटक धेरै सामानको मौज्दात प्रविष्ट गर्नुहोस्।'}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"><X size={20} /></button>
+                    <button onClick={onClose} disabled={isSaving} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"><X size={20} /></button>
                 </div>
                 <form onSubmit={handleSaveBulk} className="p-6 space-y-4 overflow-y-auto">
                     {initialData && (
@@ -699,12 +702,12 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                     )}
                     <div className="grid md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-100">
                         <Input label="आर्थिक वर्ष" value={currentFiscalYear} readOnly disabled icon={<Calendar size={16} />} tabIndex={-1} />
-                        <Select label="गोदाम/स्टोर *" options={storeOptions} value={commonDetails.storeId} onChange={e => handleCommonDetailsChange('storeId', e.target.value)} required icon={<StoreIcon size={16} />} />
-                        <Select label="प्राप्तिको स्रोत" options={mode === 'opening' ? [{ id: 'opening', value: 'Opening', label: 'ओपनिङ्ग' }] : receiptSourceOptions} value={commonDetails.receiptSource} onChange={e => handleCommonDetailsChange('receiptSource', e.target.value)} required icon={<ArrowUpCircle size={16} />} disabled={mode === 'opening'} />
-                        <NepaliDatePicker label="मिति (BS)" value={commonDetails.dateBs} onChange={val => handleCommonDetailsChange('dateBs', val)} required minDate={todayBs} maxDate={todayBs} />
-                        <div className="col-span-2"><Input label="आपूर्तिकर्ता / स्रोत" value={commonDetails.supplier} onChange={(e) => handleCommonDetailsChange('supplier', e.target.value)} placeholder="Supplier Name" icon={<User size={16} />} /></div>
-                        <div className="col-span-1"><Input label="खरिद आदेश / हस्तान्तरण नं" value={commonDetails.refNo} onChange={(e) => handleCommonDetailsChange('refNo', e.target.value)} placeholder="PO / Hafa No" icon={<FileText size={16} />} /></div>
-                        {mode === 'add' && <div className="col-span-1"><Input label="दाखिला नं *" value={commonDetails.dakhilaNo} onChange={(e) => handleCommonDetailsChange('dakhilaNo', e.target.value)} required icon={<Hash size={16} />} className="font-bold text-purple-700" /></div>}
+                        <Select label="गोदाम/स्टोर *" options={storeOptions} value={commonDetails.storeId} onChange={e => handleCommonDetailsChange('storeId', e.target.value)} required icon={<StoreIcon size={16} />} disabled={isSaving} />
+                        <Select label="प्राप्तिको स्रोत" options={mode === 'opening' ? [{ id: 'opening', value: 'Opening', label: 'ओपनिङ्ग' }] : receiptSourceOptions} value={commonDetails.receiptSource} onChange={e => handleCommonDetailsChange('receiptSource', e.target.value)} required icon={<ArrowUpCircle size={16} />} disabled={mode === 'opening' || isSaving} />
+                        <NepaliDatePicker label="मिति (BS)" value={commonDetails.dateBs} onChange={val => handleCommonDetailsChange('dateBs', val)} required minDate={todayBs} maxDate={todayBs} disabled={isSaving} />
+                        <div className="col-span-2"><Input label="आपूर्तिकर्ता / स्रोत" value={commonDetails.supplier} onChange={(e) => handleCommonDetailsChange('supplier', e.target.value)} placeholder="Supplier Name" icon={<User size={16} />} disabled={isSaving} /></div>
+                        <div className="col-span-1"><Input label="खरिद आदेश / हस्तान्तरण नं" value={commonDetails.refNo} onChange={(e) => handleCommonDetailsChange('refNo', e.target.value)} placeholder="PO / Hafa No" icon={<FileText size={16} />} disabled={isSaving} /></div>
+                        {mode === 'add' && <div className="col-span-1"><Input label="दाखिला नं *" value={commonDetails.dakhilaNo} onChange={(e) => handleCommonDetailsChange('dakhilaNo', e.target.value)} required icon={<Hash size={16} />} className="font-bold text-purple-700" disabled={isSaving} /></div>}
                     </div>
                     {validationError && <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded-r-xl text-red-700 text-sm">{validationError}</div>}
                     <div className="border border-slate-200 rounded-lg overflow-x-auto">
@@ -733,30 +736,33 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                                 {bulkItems.map((item, index) => (
                                     <tr key={item.id} className="border-t border-slate-100">
                                         <td className="px-3 py-2 text-center">{index + 1}</td>
-                                        <td className="px-1 py-1"><SearchableSelect options={index === 0 ? allInventoryItemOptions : filteredInventoryItemOptions} value={item.itemName} onChange={newName => handleItemNameChange(item.id, newName)} onSelect={(option) => handleItemSelect(item.id, option)} placeholder="सामान छान्नुहोस्" className="!pl-3 !pr-8" label="" /></td>
-                                        <td className="px-1 py-1"><Input value={item.ledgerPageNo || ''} onChange={e => handleItemFieldChange(item.id, 'ledgerPageNo', e.target.value)} placeholder="पाना नं" className="!pl-3" label="" icon={undefined}/></td>
-                                        <td className="px-1 py-1"><Input value={item.uniqueCode || ''} onChange={e => handleItemFieldChange(item.id, 'uniqueCode', e.target.value)} placeholder="कोड" className="!pl-3" label="" icon={undefined}/></td>
-                                        <td className="px-1 py-1"><Input value={item.sanketNo || ''} onChange={e => handleItemFieldChange(item.id, 'sanketNo', e.target.value)} placeholder="सङ्केत नं" className="!pl-3" label="" icon={undefined}/></td>
-                                        <td className="px-1 py-1"><Select options={itemTypeOptions} value={item.itemType} onChange={e => handleItemFieldChange(item.id, 'itemType', e.target.value as any)} placeholder="-- प्रकार --" className={`!pl-3 !pr-8 ${index > 0 && !item.itemType ? '' : ''}`} icon={undefined} label="" disabled={index > 0 && !!bulkItems[0].itemType} /></td>
-                                        <td className="px-1 py-1"><Select options={itemClassificationOptions} value={item.itemClassification || ''} onChange={e => handleItemFieldChange(item.id, 'itemClassification', e.target.value)} placeholder="-- वर्गीकरण --" className="!pl-3 !pr-8" icon={undefined} label="" onAddOptionHotkeyTriggered={() => setShowAddClassificationModal(true)} addOptionHotkey="Alt+c" /></td>
-                                        <td className="px-1 py-1"><Input value={item.unit} onChange={e => handleItemFieldChange(item.id, 'unit', e.target.value)} placeholder="एकाई" className="!pl-3" label="" icon={undefined}/></td>
-                                        <td className="px-1 py-1"><Input type="number" value={item.currentQuantity === 0 ? '' : item.currentQuantity} onChange={e => handleItemFieldChange(item.id, 'currentQuantity', e.target.value)} placeholder="०" className="text-center !pl-3" label="" icon={undefined}/></td>
-                                        <td className="px-1 py-1"><Input type="number" value={item.rate === undefined || item.rate === null ? '' : item.rate} onChange={e => handleItemFieldChange(item.id, 'rate', e.target.value)} placeholder="०.००" className="text-right !pl-3" label="" icon={undefined}/></td>
-                                        <td className="px-1 py-1"><Input type="number" value={item.tax === undefined || item.tax === null ? '' : item.tax} onChange={e => handleItemFieldChange(item.id, 'tax', e.target.value)} placeholder="०" className="text-right !pl-3" label="" icon={undefined}/></td>
+                                        <td className="px-1 py-1"><SearchableSelect options={index === 0 ? allInventoryItemOptions : filteredInventoryItemOptions} value={item.itemName} onChange={newName => handleItemNameChange(item.id, newName)} onSelect={(option) => handleItemSelect(item.id, option)} placeholder="सामान छान्नुहोस्" className="!pl-3 !pr-8" label="" disabled={isSaving} /></td>
+                                        <td className="px-1 py-1"><Input value={item.ledgerPageNo || ''} onChange={e => handleItemFieldChange(item.id, 'ledgerPageNo', e.target.value)} placeholder="पाना नं" className="!pl-3" label="" icon={undefined} disabled={isSaving}/></td>
+                                        <td className="px-1 py-1"><Input value={item.uniqueCode || ''} onChange={e => handleItemFieldChange(item.id, 'uniqueCode', e.target.value)} placeholder="कोड" className="!pl-3" label="" icon={undefined} disabled={isSaving}/></td>
+                                        <td className="px-1 py-1"><Input value={item.sanketNo || ''} onChange={e => handleItemFieldChange(item.id, 'sanketNo', e.target.value)} placeholder="सङ्केत नं" className="!pl-3" label="" icon={undefined} disabled={isSaving}/></td>
+                                        <td className="px-1 py-1"><Select options={itemTypeOptions} value={item.itemType} onChange={e => handleItemFieldChange(item.id, 'itemType', e.target.value as any)} placeholder="-- प्रकार --" className={`!pl-3 !pr-8 ${index > 0 && !item.itemType ? '' : ''}`} icon={undefined} label="" disabled={(index > 0 && !!bulkItems[0].itemType) || isSaving} /></td>
+                                        <td className="px-1 py-1"><Select options={itemClassificationOptions} value={item.itemClassification || ''} onChange={e => handleItemFieldChange(item.id, 'itemClassification', e.target.value)} placeholder="-- वर्गीकरण --" className="!pl-3 !pr-8" icon={undefined} label="" onAddOptionHotkeyTriggered={() => setShowAddClassificationModal(true)} addOptionHotkey="Alt+c" disabled={isSaving} /></td>
+                                        <td className="px-1 py-1"><Input value={item.unit} onChange={e => handleItemFieldChange(item.id, 'unit', e.target.value)} placeholder="एकाई" className="!pl-3" label="" icon={undefined} disabled={isSaving}/></td>
+                                        <td className="px-1 py-1"><Input type="number" value={item.currentQuantity === 0 ? '' : item.currentQuantity} onChange={e => handleItemFieldChange(item.id, 'currentQuantity', e.target.value)} placeholder="०" className="text-center !pl-3" label="" icon={undefined} disabled={isSaving}/></td>
+                                        <td className="px-1 py-1"><Input type="number" value={item.rate === undefined || item.rate === null ? '' : item.rate} onChange={e => handleItemFieldChange(item.id, 'rate', e.target.value)} placeholder="०.००" className="text-right !pl-3" label="" icon={undefined} disabled={isSaving}/></td>
+                                        <td className="px-1 py-1"><Input type="number" value={item.tax === undefined || item.tax === null ? '' : item.tax} onChange={e => handleItemFieldChange(item.id, 'tax', e.target.value)} placeholder="०" className="text-right !pl-3" label="" icon={undefined} disabled={isSaving}/></td>
                                         <td className="px-1 py-1 text-right font-bold text-slate-700 bg-slate-50">{item.totalAmount?.toFixed(2) || '0.00'}</td>
-                                        <td className="px-1 py-1"><Input value={shouldShowBatchExpiry(item.itemClassification) ? (item.batchNo || '') : '-'} onChange={e => handleItemFieldChange(item.id, 'batchNo', e.target.value)} placeholder="ब्याच" className="!pl-3" label="" icon={undefined} disabled={!shouldShowBatchExpiry(item.itemClassification)}/></td>
+                                        <td className="px-1 py-1"><Input value={shouldShowBatchExpiry(item.itemClassification) ? (item.batchNo || '') : '-'} onChange={e => handleItemFieldChange(item.id, 'batchNo', e.target.value)} placeholder="ब्याच" className="!pl-3" label="" icon={undefined} disabled={!shouldShowBatchExpiry(item.itemClassification) || isSaving}/></td>
                                         <td className="px-1 py-1">{shouldShowBatchExpiry(item.itemClassification) ? (<EnglishDatePicker value={item.expiryDateAd || ''} onChange={val => handleItemFieldChange(item.id, 'expiryDateAd', val)} label="" />) : (<div className="w-full h-[38px] bg-slate-100 border border-slate-300 rounded-lg flex items-center justify-center text-slate-400 text-sm">-</div>)}</td>
-                                        <td className="px-1 py-1"><Input value={item.specification || ''} onChange={e => handleItemFieldChange(item.id, 'specification', e.target.value)} placeholder="Model/Brand" className="!pl-3" label="" icon={undefined}/></td>
-                                        <td className="px-1 py-1 text-center"><button type="button" onClick={() => handleRemoveRow(item.id)} className="text-red-500 hover:text-red-700 p-1"><X size={14} /></button></td>
+                                        <td className="px-1 py-1"><Input value={item.specification || ''} onChange={e => handleItemFieldChange(item.id, 'specification', e.target.value)} placeholder="Model/Brand" className="!pl-3" label="" icon={undefined} disabled={isSaving}/></td>
+                                        <td className="px-1 py-1 text-center"><button type="button" onClick={() => handleRemoveRow(item.id)} disabled={isSaving} className="text-red-500 hover:text-red-700 p-1 disabled:opacity-30"><X size={14} /></button></td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
-                    <button type="button" onClick={handleAddRow} className="flex items-center gap-2 px-4 py-2 mt-4 text-primary-600 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors border border-dashed border-slate-300"><Plus size={18} /> लहर थप्नुहोस् (Add Row)</button>
+                    <button type="button" onClick={handleAddRow} disabled={isSaving} className="flex items-center gap-2 px-4 py-2 mt-4 text-primary-600 hover:bg-slate-50 rounded-lg text-sm font-medium transition-colors border border-dashed border-slate-300 disabled:opacity-50"><Plus size={18} /> लहर थप्नुहोस् (Add Row)</button>
                     <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50 shrink-0 -mx-6 -mb-6 mt-6">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium">रद्द (Cancel)</button>
-                        <button type="submit" disabled={isSaving} className={`flex items-center gap-2 px-6 py-2 text-white rounded-lg text-sm font-medium shadow-sm transition-colors ${saveButtonColor}`}><Send size={16} />{isSaving ? 'पठाउँदै...' : 'अनुरोध पेश गर्नुहोस् (Submit Request)'}</button>
+                        <button type="button" onClick={onClose} disabled={isSaving} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium disabled:opacity-50">रद्द (Cancel)</button>
+                        <button type="submit" disabled={isSaving} className={`flex items-center gap-2 px-6 py-2 text-white rounded-lg text-sm font-medium shadow-sm transition-colors disabled:opacity-70 ${saveButtonColor}`}>
+                            {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                            {isSaving ? 'पठाउँदै...' : 'अनुरोध पेश गर्नुहोस् (Submit Request)'}
+                        </button>
                     </div>
                 </form>
             </div>

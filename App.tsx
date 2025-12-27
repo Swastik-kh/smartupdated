@@ -4,9 +4,11 @@ import { LoginForm } from './components/LoginForm';
 import { Dashboard } from './components/Dashboard';
 import { APP_NAME, ORG_NAME } from './constants';
 import { Landmark, ShieldCheck } from 'lucide-react';
-import { User, OrganizationSettings, MagFormEntry, RabiesPatient, PurchaseOrderEntry, IssueReportEntry, FirmEntry, QuotationEntry, InventoryItem, Store, StockEntryRequest, DakhilaPratibedanEntry, ReturnEntry, MarmatEntry, DhuliyaunaEntry, LogBookEntry, DakhilaItem, TBPatient, HafaEntry } from './types';
+import { User, OrganizationSettings, MagFormEntry, RabiesPatient, PurchaseOrderEntry, IssueReportEntry, FirmEntry, QuotationEntry, InventoryItem, Store, StockEntryRequest, DakhilaPratibedanEntry, ReturnEntry, MarmatEntry, DhuliyaunaEntry, LogBookEntry, DakhilaItem, TBPatient, HafaEntry, HafaItem } from './types';
 import { db } from './firebase';
 import { ref, onValue, set, remove, update, get, Unsubscribe } from "firebase/database";
+// @ts-ignore
+import NepaliDate from 'nepali-date-converter';
 
 const INITIAL_SETTINGS: OrganizationSettings = {
     orgNameNepali: 'Smart Inventory System',
@@ -226,6 +228,110 @@ const App: React.FC = () => {
       }
   };
 
+  const handleSaveHafaEntry = async (entry: HafaEntry) => {
+    if (!currentUser) return;
+    try {
+        const sourceSafeOrg = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
+        const updates: Record<string, any> = {};
+        
+        // Ensure source identity is preserved for recipient preview
+        const finalEntry = {
+            ...entry,
+            sourceOrg: entry.sourceOrg || currentUser.organizationName,
+            sourceOrgDetails: entry.sourceOrgDetails || {
+                name: generalSettings.orgNameNepali,
+                subTitle: generalSettings.subTitleNepali,
+                address: generalSettings.address
+            }
+        };
+
+        // 1. Update source organization record
+        updates[`orgData/${sourceSafeOrg}/hafaEntries/${entry.id}`] = finalEntry;
+
+        // 2. If approved, sync with recipient organization
+        if (finalEntry.status === 'Approved') {
+            const recipientName = finalEntry.recipientOrg?.trim();
+            const targetUser = allUsers.find(u => u.organizationName.trim().toLowerCase() === recipientName.toLowerCase());
+            
+            if (targetUser) {
+                const targetSafeOrg = targetUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
+                
+                // Also create the Hafa entry in the recipient's office data for their signature
+                updates[`orgData/${targetSafeOrg}/hafaEntries/${finalEntry.id}`] = finalEntry;
+
+                // Prepare Stock Request for Recipient
+                const requestItems: InventoryItem[] = finalEntry.items.map((item, idx) => ({
+                    id: `TEMP-${Date.now()}-${idx}`,
+                    itemName: item.name,
+                    unit: item.unit,
+                    currentQuantity: item.quantity,
+                    rate: item.rate,
+                    totalAmount: item.totalAmount,
+                    itemType: finalEntry.itemType,
+                    specification: item.specification,
+                    uniqueCode: item.codeNo,
+                    lastUpdateDateBs: finalEntry.date,
+                    lastUpdateDateAd: new Date().toISOString().split('T')[0],
+                    fiscalYear: finalEntry.fiscalYear,
+                    storeId: '', 
+                    receiptSource: 'हस्तान्तरण (Transfer)'
+                }));
+
+                const stockRequest: StockEntryRequest = {
+                    id: `TR-${finalEntry.id}`,
+                    requestDateBs: finalEntry.date,
+                    requestDateAd: new Date().toISOString().split('T')[0],
+                    fiscalYear: finalEntry.fiscalYear,
+                    storeId: '', 
+                    receiptSource: 'हस्तान्तरण (Transfer)',
+                    supplier: currentUser.organizationName,
+                    refNo: finalEntry.formNo,
+                    items: requestItems,
+                    status: 'Pending',
+                    requestedBy: currentUser.username,
+                    requesterName: currentUser.fullName,
+                    requesterDesignation: currentUser.designation,
+                    mode: 'add'
+                };
+
+                updates[`orgData/${targetSafeOrg}/stockRequests/${stockRequest.id}`] = stockRequest;
+            }
+        }
+
+        await update(ref(db), updates);
+    } catch (error) {
+        console.error("Error saving Hafa Entry:", error);
+        alert("त्रुटि: फारम सुरक्षित हुन सकेन।");
+    }
+  };
+
+  const handleDeleteHafaEntry = async (id: string) => {
+    if (!currentUser) return;
+    try {
+        const sourceSafeOrg = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
+        const entryRef = ref(db, `orgData/${sourceSafeOrg}/hafaEntries/${id}`);
+        const snap = await get(entryRef);
+        if (snap.exists()) {
+            const entry: HafaEntry = snap.val();
+            // Delete from source
+            await remove(entryRef);
+            // If it was synced to a recipient (even if pending for them), try to remove there too
+            if (entry.recipientOrg) {
+                const recipientName = entry.recipientOrg.trim();
+                const targetUser = allUsers.find(u => u.organizationName.trim().toLowerCase() === recipientName.toLowerCase());
+                if (targetUser) {
+                    const targetSafeOrg = targetUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
+                    await remove(ref(db, `orgData/${targetSafeOrg}/hafaEntries/${id}`));
+                    await remove(ref(db, `orgData/${targetSafeOrg}/stockRequests/TR-${id}`));
+                }
+            }
+        }
+    } catch (error) {
+        console.error("Error deleting Hafa Entry:", error);
+        alert("त्रुटि: फारम मेटाउन सकिएन।");
+    }
+  };
+
   const handleSaveReturnEntry = async (entry: ReturnEntry) => {
     if (!currentUser) return;
     try {
@@ -260,25 +366,28 @@ const App: React.FC = () => {
       try {
           const updates: Record<string, any> = {};
           const formToSave = { ...f, sourceOrg: f.sourceOrg || currentUser.organizationName };
+          
           const sourceSafeName = formToSave.sourceOrg.trim().replace(/[.#$[\]]/g, "_");
           updates[`orgData/${sourceSafeName}/magForms/${formToSave.id}`] = formToSave;
+          
+          if (formToSave.isInstitutional && formToSave.targetOrg) {
+              const targetSafeName = formToSave.targetOrg.trim().replace(/[.#$[\]]/g, "_");
+              updates[`orgData/${targetSafeName}/magForms/${formToSave.id}`] = formToSave;
+          }
+
           if (formToSave.status === 'Approved') {
-              const currentSafeOrg = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
-              const orgPath = `orgData/${currentSafeOrg}`;
+              const actingOrg = formToSave.targetOrg || formToSave.sourceOrg || currentUser.organizationName;
+              const actingSafeOrg = actingOrg.trim().replace(/[.#$[\]]/g, "_");
+              const orgPath = `orgData/${actingSafeOrg}`;
+              
               if (formToSave.storeKeeper?.status === 'market') {
                   const poId = `PO-${formToSave.id}`;
                   const poPath = `${orgPath}/purchaseOrders/${poId}`;
-                  const poSnap = await get(ref(db, poPath));
-                  if (!poSnap.exists()) {
-                      updates[poPath] = { id: poId, magFormId: formToSave.id, magFormNo: formToSave.formNo, requestDate: formToSave.date, items: formToSave.items, status: 'Pending', fiscalYear: formToSave.fiscalYear };
-                  }
+                  updates[poPath] = { id: poId, magFormId: formToSave.id, magFormNo: formToSave.formNo, requestDate: formToSave.date, items: formToSave.items, status: 'Pending', fiscalYear: formToSave.fiscalYear };
               } else if (formToSave.storeKeeper?.status === 'stock') {
                   const irId = `IR-${formToSave.id}`;
                   const irPath = `${orgPath}/issueReports/${irId}`;
-                  const irSnap = await get(ref(db, irPath));
-                  if (!irSnap.exists()) {
-                      updates[irPath] = { id: irId, magFormId: formToSave.id, magFormNo: formToSave.formNo, requestDate: formToSave.date, items: formToSave.items, status: 'Pending', fiscalYear: formToSave.fiscalYear, itemType: formToSave.issueItemType || 'Expendable', storeId: formToSave.selectedStoreId, demandBy: formToSave.demandBy };
-                  }
+                  updates[irPath] = { id: irId, magFormId: formToSave.id, magFormNo: formToSave.formNo, requestDate: formToSave.date, items: formToSave.items, status: 'Pending', fiscalYear: formToSave.fiscalYear, itemType: formToSave.issueItemType || 'Expendable', storeId: formToSave.selectedStoreId, demandBy: formToSave.demandBy };
               }
           }
           await update(ref(db), updates);
@@ -294,7 +403,7 @@ const App: React.FC = () => {
         const prevStatus = currentReportSnap.exists() ? currentReportSnap.val().status : null;
         const updates: Record<string, any> = {};
 
-        if (report.status === 'Issued' && prevStatus !== 'Issued' && report.storeId) {
+        if (report.status === 'Issued' && prevStatus !== 'Issued') {
             const invSnap = await get(ref(db, `${orgPath}/inventory`));
             const inventory: Record<string, InventoryItem> = invSnap.exists() ? invSnap.val() : {};
             const inventoryKeys = Object.keys(inventory);
@@ -312,6 +421,58 @@ const App: React.FC = () => {
                     updates[`${orgPath}/inventory/${invMatch.key}/currentQuantity`] = invMatch.data.currentQuantity - takeQty;
                 }
             });
+
+            // AUTOMATION: Create Transfer Form (Hafa) IF AND ONLY IF linked to an Institutional Request
+            if (report.magFormId) {
+                const magSnap = await get(ref(db, `${orgPath}/magForms/${report.magFormId}`));
+                if (magSnap.exists()) {
+                    const magForm: MagFormEntry = magSnap.val();
+                    if (magForm.isInstitutional && magForm.sourceOrg) {
+                        const hafaId = `HF-AUTO-${report.id}`;
+                        const todayBs = new NepaliDate().format('YYYY-MM-DD');
+                        
+                        const hafaItems: HafaItem[] = report.items.map((item, idx) => ({
+                            id: Date.now() + idx,
+                            codeNo: item.codeNo || '',
+                            name: item.name,
+                            specification: item.specification || '',
+                            model: '',
+                            idNo: '',
+                            unit: item.unit,
+                            quantity: Number(item.quantity) || 0,
+                            rate: item.rate || 0,
+                            totalAmount: (Number(item.quantity) || 0) * (item.rate || 0),
+                            startDate: todayBs,
+                            condition: 'चालू',
+                            remarks: `निकासा नं. ${report.issueNo || report.id} बाट स्वतः सिर्जना`
+                        }));
+
+                        const autoHafa: HafaEntry = {
+                            id: hafaId,
+                            fiscalYear: report.fiscalYear || currentFiscalYear,
+                            formNo: 'TBD', 
+                            date: todayBs,
+                            status: 'Pending',
+                            decisionNo: `माग फारम नं. ${magForm.formNo}`,
+                            decisionDate: magForm.date,
+                            recipientOrg: magForm.sourceOrg, 
+                            sourceOrg: currentUser.organizationName,
+                            sourceOrgDetails: {
+                                name: generalSettings.orgNameNepali,
+                                subTitle: generalSettings.subTitleNepali,
+                                address: generalSettings.address
+                            },
+                            itemType: report.itemType || 'Expendable',
+                            items: hafaItems,
+                            preparedBy: { name: currentUser.fullName, designation: currentUser.designation, date: todayBs },
+                            approvedBy: { name: '', designation: '', date: '' }
+                        };
+
+                        // CRITICAL: Save to the PROVIDER'S database so their storekeeper sees it in Outgoing
+                        updates[`orgData/${safeOrgName}/hafaEntries/${hafaId}`] = autoHafa;
+                    }
+                }
+            }
         }
         updates[`${orgPath}/issueReports/${report.id}`] = report;
         await update(ref(db), updates);
@@ -362,7 +523,8 @@ const App: React.FC = () => {
           magForms={magForms}
           onSaveMagForm={handleSaveMagForm}
           hafaEntries={hafaEntries}
-          onSaveHafaEntry={(e) => set(getOrgRef(`hafaEntries/${e.id}`), e)}
+          onSaveHafaEntry={handleSaveHafaEntry}
+          onDeleteHafaEntry={handleDeleteHafaEntry}
           purchaseOrders={purchaseOrders}
           onUpdatePurchaseOrder={(o) => set(getOrgRef(`purchaseOrders/${o.id}`), o)}
           issueReports={issueReports}

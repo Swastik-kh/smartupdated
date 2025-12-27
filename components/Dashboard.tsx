@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Syringe, Activity, 
   ClipboardList, FileSpreadsheet, FilePlus, ShoppingCart, FileOutput, 
   BookOpen, Book, Archive, RotateCcw, Wrench, Scroll, BarChart3,
-  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User, Printer, SearchX, AlertOctagon, GraduationCap, Award, Search, Eye
+  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User, Printer, SearchX, AlertOctagon, GraduationCap, Award, Search, Eye, Award as AwardIcon, Download
 } from 'lucide-react';
 import { APP_NAME, ORG_NAME, FISCAL_YEARS } from '../constants';
 import { DashboardProps, PurchaseOrderEntry, InventoryItem, RabiesPatient, HafaEntry } from '../types'; 
@@ -33,6 +33,7 @@ import { DatabaseManagement } from './DatabaseManagement';
 import { DhuliyaunaFaram } from './DhuliyaunaFaram';
 import { LogBook } from './LogBook';
 import { GeneralSetting } from './GeneralSetting';
+import { VaccineCertificate } from './VaccineCertificate';
 // @ts-ignore
 import NepaliDate from 'nepali-date-converter';
 
@@ -51,6 +52,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onSaveMagForm,
   hafaEntries,
   onSaveHafaEntry,
+  onDeleteHafaEntry,
   purchaseOrders,
   onUpdatePurchaseOrder,
   issueReports,
@@ -105,6 +107,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [expiryModalTab, setExpiryModalTab] = useState<'soon' | 'expired'>('soon');
   const [lastSeenNotificationId, setLastSeenNotificationId] = useState<string | null>(null);
+  
+  // New state for certificate
+  const [selectedCertificatePatient, setSelectedCertificatePatient] = useState<RabiesPatient | null>(null);
 
   const latestApprovedDakhila = useMemo(() => {
       const approved = stockEntryRequests.filter(req => req.status === 'Approved');
@@ -121,35 +126,61 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
   };
 
+  // --- NOTIFICATION CALCULATIONS ---
+  const isApprover = ['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role);
+  const isStorekeeper = currentUser.role === 'STOREKEEPER';
+
+  const pendingMagCount = useMemo(() => {
+    return magForms.filter(f => {
+      const isTargetedToMe = f.targetOrg === currentUser.organizationName || (!f.isInstitutional && f.sourceOrg === currentUser.organizationName);
+      if (!isTargetedToMe) return false;
+      if (isStorekeeper) return f.status === 'Pending';
+      if (isApprover) return f.status === 'Verified';
+      return false;
+    }).length;
+  }, [magForms, isStorekeeper, isApprover, currentUser.organizationName]);
+
   const pendingHafaCount = useMemo(() => {
-    if (!['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) return 0;
-    return hafaEntries.filter(e => e.status === 'Pending').length;
-  }, [hafaEntries, currentUser.role]);
+    const myOrg = currentUser.organizationName.trim().toLowerCase();
+    
+    // 1. Outgoing Pending: Sent from my org, needs my side's approval
+    const outgoingPending = hafaEntries.filter(e => 
+      e.sourceOrg?.trim().toLowerCase() === myOrg && 
+      e.status === 'Pending'
+    ).length;
+
+    // 2. Incoming Pending: Sent to my org, needs me to "Receive" it
+    const incomingPending = hafaEntries.filter(e => 
+      e.recipientOrg?.trim().toLowerCase() === myOrg && 
+      e.status === 'Approved' && 
+      !e.recipientApprovedBy?.name
+    ).length;
+
+    return outgoingPending + incomingPending;
+  }, [hafaEntries, currentUser.organizationName]);
 
   const pendingNikashaCount = useMemo(() => {
-    if (currentUser.role === 'STOREKEEPER') {
-      return issueReports.filter(r => r.status === 'Pending').length;
-    }
-    if (['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) {
-      return issueReports.filter(r => r.status === 'Pending Approval').length;
-    }
+    if (isStorekeeper) return issueReports.filter(r => r.status === 'Pending').length;
+    if (isApprover) return issueReports.filter(r => r.status === 'Pending Approval').length;
     return 0;
-  }, [issueReports, currentUser.role]);
+  }, [issueReports, isStorekeeper, isApprover]);
 
   const pendingDakhilaCount = useMemo(() => {
-    if (!['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) return 0;
+    if (!isApprover) return 0;
     return stockEntryRequests.filter(r => r.status === 'Pending').length;
-  }, [stockEntryRequests, currentUser.role]);
+  }, [stockEntryRequests, isApprover]);
 
   const pendingReturnCount = useMemo(() => {
-    if (!['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) return 0;
+    if (!isApprover) return 0;
     return returnEntries.filter(e => e.status === 'Pending').length;
-  }, [returnEntries, currentUser.role]);
+  }, [returnEntries, isApprover]);
 
   const pendingMarmatCount = useMemo(() => {
-    if (!['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) return 0;
+    if (!isApprover) return 0;
     return marmatEntries.filter(e => e.status === 'Pending').length;
-  }, [marmatEntries, currentUser.role]);
+  }, [marmatEntries, isApprover]);
+
+  const inventoryTotalNotifications = pendingMagCount + pendingHafaCount + pendingNikashaCount + pendingDakhilaCount + pendingReturnCount + pendingMarmatCount;
 
   const stats = useMemo(() => {
     const today = new NepaliDate();
@@ -189,7 +220,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     patientsForToday.sort((a, b) => {
         if (a.isOverdue && !b.isOverdue) return -1;
         if (!a.isOverdue && b.isOverdue) return 1;
-        return a.scheduledDate.localeCompare(b.scheduledDate);
+        return a.scheduledDate.localeCompare(a.scheduledDate);
     });
 
     const myOrgInventory = inventoryItems.filter(item => currentUser.role === 'SUPER_ADMIN' || !item.orgName || item.orgName === currentUser.organizationName);
@@ -222,70 +253,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
       } catch (e) { return adDate; }
   };
 
-  const handlePrintCertificate = () => {
-    if (!selectedReportPatient) return;
-    const printContent = document.getElementById('vaccine-report-card');
-    if (printContent) {
-        const printWindow = window.open('', '_blank');
-        printWindow?.document.write(`
-            <html>
-                <head>
-                    <title>Vaccination Certificate - ${selectedReportPatient.name}</title>
-                    <link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;700&display=swap" rel="stylesheet">
-                    <script src="https://cdn.tailwindcss.com"></script>
-                    <style>
-                        @page { size: A4; margin: 0; }
-                        body { font-family: 'Mukta', sans-serif; padding: 0; margin: 0; background: white; }
-                        .certificate-wrapper {
-                            width: 210mm;
-                            height: 297mm;
-                            padding: 15mm;
-                            box-sizing: border-box;
-                            position: relative;
-                            margin: 0 auto;
-                        }
-                        .certificate-inner {
-                            border: 8px double #e2e8f0;
-                            height: 100%;
-                            padding: 10mm;
-                            box-sizing: border-box;
-                            border-radius: 4px;
-                            position: relative;
-                        }
-                        @media print {
-                            body { -webkit-print-color-adjust: exact; }
-                            .certificate-wrapper { margin: 0; border: none; }
-                        }
-                    </style>
-                </head>
-                <body onload="window.print(); setTimeout(() => window.close(), 500);">
-                    <div class="certificate-wrapper">
-                        <div class="certificate-inner">
-                            ${printContent.innerHTML}
-                        </div>
-                    </div>
-                </body>
-            </html>
-        `);
-        printWindow?.document.close();
-    }
-  };
-
   const menuItems = useMemo(() => {
     const isSuperOrAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
     const allowedMenus = currentUser.allowedMenus || [];
     const allItems = [
         { id: 'dashboard', label: 'ड्यासबोर्ड (Dashboard)', icon: <LayoutDashboard size={20} /> },
         { id: 'services', label: 'सेवा (Services)', icon: <Stethoscope size={20} />, subItems: [{ id: 'tb_leprosy', label: 'क्षयरोग (TB)', icon: <Activity size={16} /> }, { id: 'rabies', label: 'रेबिज खोप (Rabies)', icon: <Syringe size={16} /> }] },
-        { id: 'inventory', label: 'जिन्सी (Inventory)', icon: <Package size={20} />, subItems: [ 
-            { id: 'stock_entry_approval', label: 'स्टक प्रविष्टि', icon: <ClipboardCheck size={16} /> }, 
+        { id: 'inventory', label: 'जिन्सी (Inventory)', icon: <Package size={20} />, count: inventoryTotalNotifications, subItems: [ 
+            { id: 'stock_entry_approval', label: 'स्टक प्रविष्टि', icon: <ClipboardCheck size={16} />, count: pendingDakhilaCount }, 
             { id: 'jinshi_maujdat', label: 'जिन्सी मौज्दात', icon: <Warehouse size={16} /> }, 
-            { id: 'mag_faram', label: 'माग फारम', icon: <FilePlus size={16} /> }, 
+            { id: 'mag_faram', label: 'माग फारम', icon: <FilePlus size={16} />, count: pendingMagCount }, 
             { id: 'kharid_adesh', label: 'खरिद आदेश', icon: <ShoppingCart size={16} /> }, 
-            { id: 'nikasha_pratibedan', label: 'निकासा प्रतिवेदन', icon: <FileOutput size={16} /> },
-            { id: 'hafa_faram', label: 'हा.फा. फारम', icon: <ArrowRightCircle size={16} /> },
-            { id: 'jinshi_firta_khata', label: 'जिन्सी फिर्ता फारम', icon: <RotateCcw size={16} /> },
-            { id: 'marmat_adesh', label: 'मर्मत आदेश', icon: <Wrench size={16} /> },
+            { id: 'nikasha_pratibedan', label: 'निकासा प्रतिवेदन', icon: <FileOutput size={16} />, count: pendingNikashaCount },
+            { id: 'hafa_faram', label: 'हा.फा. फारम', icon: <ArrowRightCircle size={16} />, count: pendingHafaCount },
+            { id: 'jinshi_firta_khata', label: 'जिन्सी फिर्ता फारम', icon: <RotateCcw size={16} />, count: pendingReturnCount },
+            { id: 'marmat_adesh', label: 'मर्मत आदेश', icon: <Wrench size={16} />, count: pendingMarmatCount },
             { id: 'jinshi_khata', label: 'जिन्सी खाता', icon: <Book size={16} /> },
             { id: 'dakhila_pratibedan', label: 'दाखिला प्रतिवेदन', icon: <Archive size={16} /> }
         ] },
@@ -301,7 +283,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         if (isSuperOrAdmin) return true;
         return allowedMenus.includes(item.id) || (item.subItems && item.subItems.some(sub => allowedMenus.includes(sub.id)));
     });
-  }, [currentUser]);
+  }, [currentUser, inventoryTotalNotifications, pendingDakhilaCount, pendingMagCount, pendingNikashaCount, pendingHafaCount, pendingReturnCount, pendingMarmatCount]);
 
   const handleMenuClick = (item: any) => {
     if (item.subItems) setExpandedMenu(expandedMenu === item.id ? null : item.id);
@@ -309,7 +291,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const handleSubItemClick = (subItemId: string) => { setActiveItem(subItemId); setIsSidebarOpen(false); };
-  const handleDakhilaFromPo = (po: PurchaseOrderEntry) => { setPendingPoDakhila(po); setActiveItem('jinshi_maujdat'); };
 
   const renderContent = () => {
     switch (activeItem) {
@@ -371,123 +352,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
                 <div className="relative z-10"><h2 className="text-2xl font-black font-nepali mb-2">नमस्ते, {currentUser.fullName}!</h2><p className="text-primary-100 font-medium opacity-90 text-sm">स्मार्ट जिन्सी व्यवस्थापन प्रणालीमा तपाईंलाई स्वागत छ।</p></div>
             </div>
-
-            {showAttendanceModal && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 no-print">
-                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setShowAttendanceModal(false)}></div>
-                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-                        <div className="px-6 py-5 border-b bg-emerald-50 text-emerald-800 flex justify-between items-center">
-                            <div className="flex items-center gap-3"><div className="bg-emerald-100 p-2 rounded-xl text-emerald-600"><CalendarCheck size={20} /></div><div><h3 className="font-bold font-nepali text-lg">खोप हाजिरी तथा बाँकी विवरण</h3><p className="text-xs text-emerald-600 font-medium">{new NepaliDate().format('YYYY MMMM DD')} सम्मको विवरण</p></div></div>
-                            <button onClick={() => setShowAttendanceModal(false)} className="p-2 hover:bg-emerald-100 rounded-full transition-colors"><X size={20} /></button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto max-h-[60vh] p-6">
-                            {stats.patientsForToday.length === 0 ? (<div className="flex flex-col items-center justify-center py-12 text-slate-400"><Activity size={48} className="opacity-20 mb-4" /><p className="font-nepali text-lg font-bold">आजसम्म कुनै खोप तालिका बाँकी छैन।</p></div>) : (
-                                <div className="space-y-3">{stats.patientsForToday.map(({ patient, doseDay, status, scheduledDate, isOverdue }, idx) => (
-                                    <div key={idx} className={`flex items-center justify-between p-4 rounded-2xl border transition-colors ${status === 'Given' ? 'border-emerald-100 bg-emerald-50/20' : isOverdue ? 'border-red-100 bg-red-50/20' : 'border-orange-100 bg-orange-50/20'}`}>
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${status === 'Given' ? 'bg-emerald-100 text-emerald-700' : isOverdue ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>{patient.name.charAt(0)}</div>
-                                            <div><h4 className="font-bold text-slate-800">{patient.name}</h4><div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider"><span>ID: {patient.regNo}</span><span>•</span><span className={isOverdue ? 'text-red-500 font-black' : ''}>तालिका: {convertAdToBs(scheduledDate)}</span></div></div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex flex-col items-end"><span className="bg-white px-3 py-1 rounded-full border border-slate-200 text-[10px] font-black text-slate-600">DAY {doseDay}</span></div>
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider ${status === 'Given' ? 'bg-emerald-500 text-white border-emerald-600' : isOverdue ? 'bg-red-600 text-white border-red-700' : 'bg-orange-500 text-white border-orange-600'}`}>{status === 'Given' ? 'सम्पन्न' : 'बाँकी'}</span>
-                                        </div>
-                                    </div>
-                                ))}</div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {showCompletedModal && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 no-print">
-                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => { setShowCompletedModal(false); setSelectedReportPatient(null); setCompletedSearchTerm(''); }}></div>
-                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-                        <div className="px-6 py-5 border-b bg-blue-50 text-blue-800 flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-blue-100 p-2 rounded-xl text-blue-600"><GraduationCap size={20} /></div>
-                                <div><h3 className="font-bold font-nepali text-lg">खोप पुरा गरेका बिरामीहरू</h3><p className="text-xs text-blue-600 font-medium">Vaccine Course Completed</p></div>
-                            </div>
-                            <button onClick={() => { setShowCompletedModal(false); setSelectedReportPatient(null); setCompletedSearchTerm(''); }} className="p-2 hover:bg-blue-100 rounded-full transition-colors"><X size={20} /></button>
-                        </div>
-                        
-                        <div className="flex-1 overflow-y-auto max-h-[60vh] p-6">
-                            {!selectedReportPatient ? (
-                                <>
-                                    <div className="relative mb-6">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Search size={18} /></div>
-                                        <input type="text" placeholder="नाम, दर्ता नं. वा ठेगानाबाट खोज्नुहोस्..." className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:ring-4 focus:ring-blue-500/10 outline-none text-sm transition-all" value={completedSearchTerm} onChange={(e) => setCompletedSearchTerm(e.target.value)} />
-                                    </div>
-                                    <div className="space-y-3">{filteredCompletedPatients.map((patient, idx) => (
-                                        <div key={idx} onClick={() => setSelectedReportPatient(patient)} className="flex items-center justify-between p-4 rounded-2xl border border-blue-100 bg-blue-50/10 cursor-pointer hover:bg-blue-50 transition-all group">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold bg-blue-100 text-blue-700 transition-colors">{patient.name.charAt(0)}</div>
-                                                <div><h4 className="font-bold text-slate-800">{patient.name}</h4><div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider"><span>ID: {patient.regNo}</span><span>•</span><span>{patient.address}</span></div></div>
-                                            </div>
-                                            <span className="px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider bg-blue-500 text-white border-blue-600">VIEW CERTIFICATE</span>
-                                        </div>
-                                    ))}</div>
-                                </>
-                            ) : (
-                                <div id="vaccine-report-card" className="bg-white p-2 font-nepali">
-                                    <div className="mb-4">
-                                        <div className="flex items-start justify-between">
-                                            <div className="w-16"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Emblem_of_Nepal.svg/1200px-Emblem_of_Nepal.svg.png" alt="Emblem" className="h-14 w-14 object-contain" /></div>
-                                            <div className="flex-1 text-center">
-                                                <h1 className="text-lg font-bold text-red-600">{generalSettings.orgNameNepali}</h1>
-                                                {generalSettings.subTitleNepali && <h2 className="text-base font-bold">{generalSettings.subTitleNepali}</h2>}
-                                                <div className="text-[10px] mt-1 space-x-1 font-medium text-slate-500"><span>{generalSettings.address}</span>{generalSettings.phone && <span>| फोन: {generalSettings.phone}</span>}</div>
-                                            </div>
-                                            <div className="w-16"></div>
-                                        </div>
-                                        <div className="text-center mt-4 border-b pb-2"><h2 className="text-xl font-black text-slate-800 underline underline-offset-8">रेबिज विरुद्धको खोप प्रमाणपत्र</h2><p className="text-[11px] text-slate-500 uppercase tracking-widest font-bold mt-1">Vaccination Completion Certificate</p></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3 text-sm mb-4 border p-3 rounded-xl bg-slate-50/50">
-                                        <div><p className="text-[10px] font-bold text-slate-400 uppercase">Patient Name</p><p className="font-black text-slate-800">{selectedReportPatient.name}</p></div>
-                                        <div><p className="text-[10px] font-bold text-slate-400 uppercase">Reg No</p><p className="font-mono font-bold text-indigo-600">{selectedReportPatient.regNo}</p></div>
-                                        <div><p className="text-[10px] font-bold text-slate-400 uppercase">Age/Sex</p><p className="font-bold text-slate-800">{selectedReportPatient.age} Yr / {selectedReportPatient.sex}</p></div>
-                                        <div><p className="text-[10px] font-bold text-slate-400 uppercase">Address</p><p className="font-bold text-slate-800">{selectedReportPatient.address}</p></div>
-                                    </div>
-                                    <table className="w-full text-xs text-center border-collapse border border-slate-300">
-                                        <thead className="bg-slate-100"><tr><th className="p-2 border border-slate-300">Dose</th><th className="p-2 border border-slate-300">Scheduled (BS)</th><th className="p-2 border border-slate-300">Administered (BS)</th></tr></thead>
-                                        <tbody>{selectedReportPatient.schedule?.map((dose, idx) => (
-                                            <tr key={idx}><td className="p-2 border border-slate-300 font-bold">DAY {dose.day}</td><td className="p-2 border border-slate-300 font-nepali">{convertAdToBs(dose.date)}</td><td className="p-2 border border-slate-300 font-black text-emerald-600 font-nepali">{dose.givenDate ? convertAdToBs(dose.givenDate) : '-'}</td></tr>
-                                        ))}</tbody>
-                                    </table>
-                                    <div className="mt-12 grid grid-cols-2 gap-16 text-center text-sm">
-                                        <div className="border-t border-slate-900 pt-1 font-bold">तयार गर्ने</div>
-                                        <div className="border-t border-slate-900 pt-1 font-bold">प्रमाणित गर्ने</div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                        <div className="p-4 bg-slate-50 border-t flex justify-end gap-3">
-                            {selectedReportPatient ? (<><button onClick={() => setSelectedReportPatient(null)} className="px-6 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-bold">Back</button><button onClick={handlePrintCertificate} className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg flex items-center gap-2"><Printer size={16} /> Print Certificate</button></>) : (<button onClick={() => setShowCompletedModal(false)} className="px-6 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-bold">Close</button>)}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {showExpiryModal && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in no-print" onClick={() => setShowExpiryModal(false)}></div>
-                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-                        <div className={`px-6 py-5 border-b flex justify-between items-center no-print ${expiryModalTab === 'expired' ? 'bg-red-50 text-red-800' : 'bg-orange-50 text-orange-800'}`}>
-                            <div className="flex items-center gap-3"><div className={`p-2 rounded-xl ${expiryModalTab === 'expired' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>{expiryModalTab === 'expired' ? <AlertOctagon size={20} /> : <AlertTriangle size={20} />}</div><div><h3 className="font-bold font-nepali text-lg">म्याद विवरण (Expiry Status)</h3><div className="flex gap-2 mt-1"><button onClick={() => setExpiryModalTab('soon')} className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${expiryModalTab === 'soon' ? 'bg-orange-600 text-white' : 'bg-white/50 text-orange-700 hover:bg-orange-100'}`}>म्याद सकिन लागेका ({stats.expiringSoonItems.length})</button><button onClick={() => setExpiryModalTab('expired')} className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${expiryModalTab === 'expired' ? 'bg-red-600 text-white' : 'bg-white/50 text-red-700 hover:bg-red-100'}`}>म्याद सकिएका ({stats.alreadyExpiredItems.length})</button></div></div></div>
-                            <button onClick={() => setShowExpiryModal(false)} className="p-2 hover:bg-white/50 rounded-full transition-colors"><X size={20} /></button>
-                        </div>
-                        <div className="flex-1 overflow-auto max-h-[70vh]">
-                             <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] sticky top-0"><tr><th className="px-6 py-4 border-b">Item Name</th><th className="px-6 py-4 border-b">Store</th><th className="px-6 py-4 border-b">Quantity</th><th className="px-6 py-4 border-b">Expiry (BS)</th></tr></thead>
-                                <tbody className="divide-y divide-slate-100">{(expiryModalTab === 'soon' ? stats.expiringSoonItems : stats.alreadyExpiredItems).map((item, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50"><td className="px-6 py-4"><div className="font-bold text-slate-800">{item.itemName}</div></td><td className="px-6 py-4"><span className="text-xs font-medium text-slate-600">{stores.find(s => s.id === item.storeId)?.name || 'N/A'}</span></td><td className="px-6 py-4 font-black text-slate-800">{item.currentQuantity} {item.unit}</td><td className="px-6 py-4"><span className={`px-3 py-1 rounded-full text-xs font-black border ${expiryModalTab === 'expired' ? 'bg-red-600 text-white' : 'bg-orange-50 text-orange-600'}`}>{item.expiryDateBs || 'N/A'}</span></td></tr>
-                                ))}</tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
       );
       case 'general_setting': return <GeneralSetting settings={generalSettings} onUpdateSettings={onUpdateGeneralSettings} />;
@@ -497,8 +361,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       case 'tb_leprosy': return <TBPatientRegistration currentFiscalYear={currentFiscalYear} currentUser={currentUser} patients={tbPatients} onAddPatient={onAddTBPatient} onUpdatePatient={onUpdateTBPatient} onDeletePatient={onDeleteTBPatient} />;
       case 'rabies': return <RabiesRegistration currentFiscalYear={currentFiscalYear} patients={rabiesPatients} onAddPatient={onAddRabiesPatient} onUpdatePatient={onUpdateRabiesPatient} onDeletePatient={onDeletePatient} currentUser={currentUser} />;
       case 'mag_faram': return <MagFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} existingForms={magForms} onSave={onSaveMagForm} inventoryItems={inventoryItems} stores={stores} generalSettings={generalSettings} allUsers={users} issueReports={issueReports} />;
-      case 'hafa_faram': return <HafaFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} existingEntries={hafaEntries} onSave={onSaveHafaEntry} inventoryItems={inventoryItems} stores={stores} generalSettings={generalSettings} />;
-      case 'kharid_adesh': return <KharidAdesh orders={purchaseOrders} currentFiscalYear={currentFiscalYear} onSave={onUpdatePurchaseOrder} currentUser={currentUser} firms={firms} quotations={quotations} onDakhilaClick={handleDakhilaFromPo} generalSettings={generalSettings} />;
+      case 'hafa_faram': return <HafaFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} existingEntries={hafaEntries} onSave={onSaveHafaEntry} onDelete={onDeleteHafaEntry} inventoryItems={inventoryItems} stores={stores} generalSettings={generalSettings} users={users} />;
+      case 'kharid_adesh': return <KharidAdesh orders={purchaseOrders} currentFiscalYear={currentFiscalYear} onSave={onUpdatePurchaseOrder} currentUser={currentUser} firms={firms} quotations={quotations} onDakhilaClick={(po) => setActiveItem('jinshi_maujdat')} generalSettings={generalSettings} />;
       case 'nikasha_pratibedan': return <NikashaPratibedan reports={issueReports} onSave={onUpdateIssueReport} currentUser={currentUser} currentFiscalYear={currentFiscalYear} generalSettings={generalSettings} />;
       case 'jinshi_maujdat': return <JinshiMaujdat currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} onAddInventoryItem={onAddInventoryItem} onUpdateInventoryItem={onUpdateInventoryItem} stores={stores} onRequestStockEntry={onRequestStockEntry} pendingPoDakhila={pendingPoDakhila} onClearPendingPoDakhila={() => setPendingPoDakhila(null)} />;
       case 'stock_entry_approval': return <StockEntryApproval requests={stockEntryRequests} currentUser={currentUser} onApprove={onApproveStockEntry} onReject={onRejectStockEntry} stores={stores} />;
@@ -522,38 +386,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <nav className="flex-1 p-3 space-y-1 custom-scrollbar">
              {menuItems.map((item: any) => (
                <div key={item.id}>
-                  <button onClick={() => handleMenuClick(item)} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${activeItem === item.id ? 'bg-primary-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><div className="flex items-center gap-3">{item.icon}<span className="font-medium font-nepali text-sm">{item.label}</span></div>{item.subItems && (expandedMenu === item.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}</button>
+                  <button onClick={() => handleMenuClick(item)} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${activeItem === item.id || (item.subItems && item.subItems.some((s: any) => s.id === activeItem)) ? 'bg-primary-600/10 text-primary-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                    <div className="flex items-center gap-3">
+                      {item.icon}
+                      <span className="font-medium font-nepali text-sm">{item.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {item.count > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-sm">
+                          {item.count}
+                        </span>
+                      )}
+                      {item.subItems && (expandedMenu === item.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
+                    </div>
+                  </button>
                   {item.subItems && expandedMenu === item.id && (
                       <div className="mt-1 ml-4 pl-3 border-l border-slate-800 space-y-1">
                           {item.subItems.map((sub: any) => (
-                              <button key={sub.id} onClick={() => handleSubItemClick(sub.id)} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-nepali ${activeItem === sub.id ? 'bg-slate-800 text-primary-300' : 'text-slate-500 hover:text-slate-200'}`}>
+                              <button key={sub.id} onClick={() => handleSubItemClick(sub.id)} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-nepali ${activeItem === sub.id ? 'bg-primary-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-200'}`}>
                                 <div className="flex items-center gap-2">
                                   {sub.icon}
                                   <span>{sub.label}</span>
                                 </div>
-                                {sub.id === 'hafa_faram' && pendingHafaCount > 0 && (
+                                {sub.count > 0 && (
                                   <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm ring-1 ring-white/20">
-                                    {pendingHafaCount}
-                                  </span>
-                                )}
-                                {sub.id === 'nikasha_pratibedan' && pendingNikashaCount > 0 && (
-                                  <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm ring-1 ring-white/20">
-                                    {pendingNikashaCount}
-                                  </span>
-                                )}
-                                {sub.id === 'dakhila_pratibedan' && pendingDakhilaCount > 0 && (
-                                  <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm ring-1 ring-white/20">
-                                    {pendingDakhilaCount}
-                                  </span>
-                                )}
-                                {sub.id === 'jinshi_firta_khata' && pendingReturnCount > 0 && (
-                                  <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm ring-1 ring-white/20">
-                                    {pendingReturnCount}
-                                  </span>
-                                )}
-                                {sub.id === 'marmat_adesh' && pendingMarmatCount > 0 && (
-                                  <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-pulse shadow-sm ring-1 ring-white/20">
-                                    {pendingMarmatCount}
+                                    {sub.count}
                                   </span>
                                 )}
                               </button>
@@ -572,6 +429,233 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </header>
         <main className="flex-1 custom-scrollbar bg-slate-50/30 p-4 md:p-6 print:p-0 print:bg-white print:overflow-visible"><div className="max-w-7xl mx-auto pb-20 print:pb-0">{renderContent()}</div></main>
       </div>
+
+      {/* --- ATTENDANCE MODAL --- */}
+      {showAttendanceModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowAttendanceModal(false)}></div>
+              <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
+                  <div className="px-6 py-4 border-b bg-emerald-50 flex justify-between items-center text-emerald-800">
+                      <div className="flex items-center gap-3">
+                          <CalendarCheck size={20} />
+                          <h3 className="font-bold font-nepali">आजको खोप हाजिरी (Vaccination Schedule)</h3>
+                      </div>
+                      <button onClick={() => setShowAttendanceModal(false)} className="p-2 hover:bg-white rounded-full"><X size={20}/></button>
+                  </div>
+                  <div className="p-0 overflow-y-auto">
+                      <table className="w-full text-sm text-left">
+                          <thead className="bg-slate-50 sticky top-0">
+                              <tr>
+                                  <th className="px-6 py-3">Patient Name</th>
+                                  <th className="px-6 py-3">Dose</th>
+                                  <th className="px-6 py-3">Status</th>
+                                  <th className="px-6 py-3">Reg No.</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                              {stats.patientsForToday.length === 0 ? (
+                                  <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">आज कुनै तालिका छैन।</td></tr>
+                              ) : (
+                                  stats.patientsForToday.map((item, idx) => (
+                                      <tr key={idx} className={`hover:bg-slate-50 ${item.isOverdue ? 'bg-red-50/30' : ''}`}>
+                                          <td className="px-6 py-4 font-bold">{item.patient.name}</td>
+                                          <td className="px-6 py-4 font-mono">Day {item.doseDay}</td>
+                                          <td className="px-6 py-4">
+                                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                                  item.status === 'Given' ? 'bg-green-50 text-green-700 border-green-200' : 
+                                                  item.isOverdue ? 'bg-red-50 text-red-700 border-red-200' : 'bg-orange-50 text-orange-700 border-orange-200'
+                                              }`}>
+                                                  {item.status === 'Given' ? 'पुरा भयो' : item.isOverdue ? 'ढिला भएको' : 'आउनु पर्ने'}
+                                              </span>
+                                          </td>
+                                          <td className="px-6 py-4 text-xs font-mono">{item.patient.regNo}</td>
+                                      </tr>
+                                  ))
+                              )}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* --- COMPLETED PATIENTS MODAL --- */}
+      {showCompletedModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowCompletedModal(false)}></div>
+              <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
+                  <div className="px-6 py-4 border-b bg-blue-50 flex justify-between items-center text-blue-800">
+                      <div className="flex items-center gap-3">
+                          <GraduationCap size={20} />
+                          <h3 className="font-bold font-nepali">खोप पुरा गरेका बिरामीहरू (Completed)</h3>
+                      </div>
+                      <button onClick={() => setShowCompletedModal(false)} className="p-2 hover:bg-white rounded-full"><X size={20}/></button>
+                  </div>
+                  <div className="p-4 border-b">
+                      <div className="relative">
+                          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input 
+                              type="text" 
+                              placeholder="नाम वा दर्ता नं खोज्नुहोस्..." 
+                              className="w-full pl-9 pr-4 py-2 border rounded-lg outline-none text-sm"
+                              value={completedSearchTerm}
+                              onChange={(e) => setCompletedSearchTerm(e.target.value)}
+                          />
+                      </div>
+                  </div>
+                  <div className="p-0 overflow-y-auto">
+                      <table className="w-full text-sm text-left">
+                          <thead className="bg-slate-50 sticky top-0">
+                              <tr>
+                                  <th className="px-6 py-3">Reg No.</th>
+                                  <th className="px-6 py-3">Patient Name</th>
+                                  <th className="px-6 py-3">Address</th>
+                                  <th className="px-6 py-3 text-right">Action</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                              {filteredCompletedPatients.length === 0 ? (
+                                  <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">कोही फेला परेन।</td></tr>
+                              ) : (
+                                  filteredCompletedPatients.map((p) => (
+                                      <tr key={p.id} className="hover:bg-slate-50">
+                                          <td className="px-6 py-4 font-mono font-bold">{p.regNo}</td>
+                                          <td className="px-6 py-4 font-bold">{p.name}</td>
+                                          <td className="px-6 py-4 text-xs">{p.address}</td>
+                                          <td className="px-6 py-4 text-right">
+                                              <div className="flex justify-end gap-2">
+                                                  <button className="text-primary-600 hover:underline font-bold text-xs" onClick={() => { setActiveItem('rabies'); setShowCompletedModal(false); }}>विवरण हेर्नुहोस्</button>
+                                                  <button className="bg-indigo-600 text-white px-3 py-1 rounded-lg font-bold text-[10px] shadow-sm hover:bg-indigo-700 flex items-center gap-1" onClick={() => setSelectedCertificatePatient(p)}>
+                                                      <AwardIcon size={12} /> प्रमाणपत्र (Cert)
+                                                  </button>
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  ))
+                              )}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* --- VACCINE CERTIFICATE MODAL --- */}
+      {selectedCertificatePatient && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setSelectedCertificatePatient(null)}></div>
+              <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-y-auto animate-in zoom-in-95 no-print">
+                  <div className="sticky top-0 z-10 px-6 py-4 border-b bg-white flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                          <AwardIcon className="text-indigo-600" />
+                          <h3 className="font-bold text-slate-800 font-nepali">खोप प्रमाणपत्र प्रिभ्यु</h3>
+                      </div>
+                      <div className="flex gap-2">
+                          <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2">
+                              <Printer size={16} /> प्रिन्ट गर्नुहोस्
+                          </button>
+                          <button onClick={() => setSelectedCertificatePatient(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400"><X size={20}/></button>
+                      </div>
+                  </div>
+                  <div className="p-4 md:p-10 flex justify-center bg-slate-50">
+                      <VaccineCertificate patient={selectedCertificatePatient} generalSettings={generalSettings} />
+                  </div>
+              </div>
+              {/* Hidden Print Container for layout control */}
+              <div className="hidden print:block fixed inset-0 bg-white z-[9999]">
+                  <VaccineCertificate patient={selectedCertificatePatient} generalSettings={generalSettings} />
+              </div>
+          </div>
+      )}
+
+      {/* --- EXPIRY ALERT MODAL --- */}
+      {showExpiryModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowExpiryModal(false)}></div>
+              <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
+                  <div className={`px-6 py-4 border-b flex justify-between items-center ${expiryModalTab === 'expired' ? 'bg-red-50 text-red-800' : 'bg-orange-50 text-orange-800'}`}>
+                      <div className="flex items-center gap-3">
+                          {expiryModalTab === 'expired' ? <AlertOctagon size={20} /> : <Clock size={20} />}
+                          <h3 className="font-bold font-nepali">
+                              {expiryModalTab === 'expired' ? 'म्याद समाप्त भएका सामानहरू' : '३ महिनाभित्र म्याद सकिने सामानहरू'}
+                          </h3>
+                      </div>
+                      <button onClick={() => setShowExpiryModal(false)} className="p-2 hover:bg-white rounded-full"><X size={20}/></button>
+                  </div>
+                  <div className="flex p-2 bg-slate-100 gap-1">
+                      <button 
+                          onClick={() => setExpiryModalTab('soon')} 
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${expiryModalTab === 'soon' ? 'bg-white shadow-sm text-orange-600' : 'text-slate-500'}`}
+                      >
+                          Expiring Soon ({stats.expiringSoonItems.length})
+                      </button>
+                      <button 
+                          onClick={() => setExpiryModalTab('expired')} 
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${expiryModalTab === 'expired' ? 'bg-white shadow-sm text-red-600' : 'text-slate-500'}`}
+                      >
+                          Expired ({stats.alreadyExpiredItems.length})
+                      </button>
+                  </div>
+                  <div className="p-0 overflow-y-auto">
+                      <table className="w-full text-xs text-left">
+                          <thead className="bg-slate-50 sticky top-0">
+                              <tr>
+                                  <th className="px-4 py-3">Item Name</th>
+                                  <th className="px-4 py-3 text-center">Batch</th>
+                                  <th className="px-4 py-3 text-center">Expiry</th>
+                                  <th className="px-4 py-3 text-center">Qty</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                              {(expiryModalTab === 'expired' ? stats.alreadyExpiredItems : stats.expiringSoonItems).length === 0 ? (
+                                  <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">कुनै डाटा छैन।</td></tr>
+                              ) : (
+                                  (expiryModalTab === 'expired' ? stats.alreadyExpiredItems : stats.expiringSoonItems).map((item) => (
+                                      <tr key={item.id} className="hover:bg-slate-50">
+                                          <td className="px-4 py-3 font-bold">{item.itemName}</td>
+                                          <td className="px-4 py-3 text-center font-mono">{item.batchNo}</td>
+                                          <td className="px-4 py-3 text-center text-red-600 font-bold">{item.expiryDateBs}</td>
+                                          <td className="px-4 py-3 text-center font-black">{item.currentQuantity}</td>
+                                      </tr>
+                                  ))
+                              )}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* --- NOTIFICATION MODAL --- */}
+      {showNotificationModal && latestApprovedDakhila && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowNotificationModal(false)}></div>
+              <div className="relative bg-white rounded-[24px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
+                  <div className="p-8 text-center">
+                      <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <CheckCircle2 size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-slate-800 font-nepali mb-2">दाखिला स्वीकृत भएको जानकारी</h3>
+                      <p className="text-sm text-slate-500 font-nepali leading-relaxed">
+                          स्टोरबाट पठाइएको दाखिला अनुरोध स्वीकृत भएको छ। <br/>
+                          सामानहरू मौज्दातमा थपिएका छन्।
+                      </p>
+                      <div className="mt-6 bg-slate-50 p-4 rounded-xl text-left border border-slate-100">
+                          <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Source Details</p>
+                          <p className="text-sm font-bold text-slate-700">{latestApprovedDakhila.receiptSource}</p>
+                          <p className="text-xs text-slate-500 mt-1">Ref No: {latestApprovedDakhila.refNo}</p>
+                      </div>
+                  </div>
+                  <button 
+                      onClick={() => setShowNotificationModal(false)}
+                      className="w-full py-4 bg-slate-900 text-white font-bold hover:bg-black transition-colors"
+                  >
+                      धन्यवाद, हेरेँ
+                  </button>
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };
