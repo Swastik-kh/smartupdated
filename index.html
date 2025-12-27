@@ -5,7 +5,31 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="google-site-verification" content="google7c6009dd8d4914d6" />
-    <title>Smart Inventory - Login Portal</title>
+    
+    <!-- SEO Meta Tags -->
+    <title>Smart Inventory - Professional Jinshi Management System</title>
+    <meta name="description" content="Smart Inventory: एक अत्याधुनिक र सुरक्षित जिन्सी व्यवस्थापन प्रणाली। सरकारी तथा निजी संस्थाहरूको लागि उपयुक्त म.ले.प. फारमहरू सहितको सफ्टवेयर।" />
+    <meta name="keywords" content="Smart Inventory, Jinshi Management, Nepal Inventory System, म.ले.प. फारम, Inventory Software Nepal" />
+    <meta name="author" content="Swastik Khatiwada" />
+
+    <!-- Favicon for Google Search -->
+    <link rel="icon" type="image/png" href="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+    <link rel="apple-touch-icon" href="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://smart-inventory.vercel.app/" />
+    <meta property="og:title" content="Smart Inventory - Professional Jinshi Management System" />
+    <meta property="og:description" content="सुरक्षित, भरपर्दो र आधुनिक जिन्सी व्यवस्थापन प्रणाली। अब तपाइँको संस्थाको सामानको हिसाब किताब डिजिटल बनाउनुहोस्।" />
+    <meta property="og:image" content="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://smart-inventory.vercel.app/" />
+    <meta property="twitter:title" content="Smart Inventory - Professional Jinshi Management System" />
+    <meta property="twitter:description" content="सुरक्षित र आधुनिक जिन्सी व्यवस्थापन प्रणाली।" />
+    <meta property="twitter:image" content="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,7 +68,6 @@
       }
 
       html, body {
-        /* Allow natural scrolling on the body for the login page */
         min-height: 100dvh;
         width: 100%;
         margin: 0;
@@ -54,7 +77,6 @@
       }
 
       #root {
-        /* Content determines height, but dashboard will override this with its own 100dvh */
         min-height: 100dvh;
         width: 100%;
         display: flex;
@@ -63,7 +85,6 @@
 
       .font-nepali { font-family: 'Mukta', sans-serif; }
       
-      /* Smooth inner scrolling for dashboard components */
       .custom-scrollbar {
         overflow-y: auto;
         overflow-x: hidden;
@@ -73,7 +94,6 @@
         scrollbar-color: #cbd5e1 transparent;
       }
 
-      /* Webkit scrollbar styling */
       .custom-scrollbar::-webkit-scrollbar { width: 5px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
