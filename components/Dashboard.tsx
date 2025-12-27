@@ -434,7 +434,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {showAttendanceModal && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowAttendanceModal(false)}></div>
-              <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
+              <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95">
                   <div className="px-6 py-4 border-b bg-emerald-50 flex justify-between items-center text-emerald-800">
                       <div className="flex items-center gap-3">
                           <CalendarCheck size={20} />
@@ -448,18 +448,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               <tr>
                                   <th className="px-6 py-3">Patient Name</th>
                                   <th className="px-6 py-3">Dose</th>
+                                  <th className="px-6 py-3">Scheduled Date (BS)</th>
                                   <th className="px-6 py-3">Status</th>
                                   <th className="px-6 py-3">Reg No.</th>
                               </tr>
                           </thead>
                           <tbody className="divide-y">
                               {stats.patientsForToday.length === 0 ? (
-                                  <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">आज कुनै तालिका छैन।</td></tr>
+                                  <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">आज कुनै तालिका छैन।</td></tr>
                               ) : (
                                   stats.patientsForToday.map((item, idx) => (
                                       <tr key={idx} className={`hover:bg-slate-50 ${item.isOverdue ? 'bg-red-50/30' : ''}`}>
                                           <td className="px-6 py-4 font-bold">{item.patient.name}</td>
                                           <td className="px-6 py-4 font-mono">Day {item.doseDay}</td>
+                                          <td className="px-6 py-4 font-nepali font-bold text-slate-600">
+                                              {convertAdToBs(item.scheduledDate)}
+                                          </td>
                                           <td className="px-6 py-4">
                                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                                                   item.status === 'Given' ? 'bg-green-50 text-green-700 border-green-200' : 
