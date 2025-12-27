@@ -368,6 +368,19 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
     }
   }, [selectedDoseInfo]);
 
+  // NEW: Convert actual given date (AD) to BS for display in given message
+  const givenDateBsValue = useMemo(() => {
+    if (!selectedDoseInfo?.dose?.givenDate) return '';
+    try {
+        const parts = selectedDoseInfo.dose.givenDate.split('-');
+        const adDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        const nd = new NepaliDate(adDate);
+        return nd.format('YYYY-MM-DD');
+    } catch (e) {
+        return selectedDoseInfo.dose.givenDate;
+    }
+  }, [selectedDoseInfo]);
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
       <div className="flex items-center justify-between border-b border-slate-200 pb-4">
@@ -583,7 +596,7 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
                           {selectedDoseInfo.dose.status === 'Given' && (
                               <div className="bg-green-50 border border-green-100 p-3 rounded-xl text-center font-nepali text-green-700">
                                   <CheckCircle2 size={16} className="inline mr-1" /> 
-                                  <span className="text-xs font-bold">खोप पहिल्यै लगाइसकेको छ (लगाएको मिति: {selectedDoseInfo.dose.givenDate})</span>
+                                  <span className="text-xs font-bold">खोप पहिल्यै लगाइसकेको छ (लगाएको मिति: {givenDateBsValue})</span>
                               </div>
                           )}
                       </div>
