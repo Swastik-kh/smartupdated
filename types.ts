@@ -83,6 +83,7 @@ export interface RabiesPatient {
   exposureDateBs: string; 
   regimen: 'Intradermal' | 'Intramuscular';
   schedule: VaccinationDose[];
+  orgName?: string; // Added to track which organization this record belongs to
 }
 
 export interface TBReport {

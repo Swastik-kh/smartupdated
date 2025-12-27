@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Save, RotateCcw, Syringe, Calendar, FileDigit, User, Phone, MapPin, CalendarRange, Clock, CheckCircle2, Search, X, AlertTriangle, Trash2, Info, Activity, Filter, List, Globe, RefreshCw, Pencil } from 'lucide-react';
+/* Added ShieldCheck to lucide-react imports */
+import { Save, RotateCcw, Syringe, Calendar, FileDigit, User, Phone, MapPin, CalendarRange, Clock, CheckCircle2, Search, X, AlertTriangle, Trash2, Info, Activity, Filter, List, Globe, RefreshCw, Pencil, Building2, ShieldCheck } from 'lucide-react';
 import { Input } from './Input';
 import { Select } from './Select';
 import { NepaliDatePicker } from './NepaliDatePicker';
@@ -66,6 +67,7 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'today'>('all');
+  const [filterOrg, setFilterOrg] = useState<string>('all'); // Organization Filter
   const [showAllYears, setShowAllYears] = useState(true); 
   const [modalDateBs, setModalDateBs] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -78,7 +80,15 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
       dose: VaccinationDose;
   } | null>(null);
 
-  // Auto-fill modalDateBs when a dose is selected
+  const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
+  const isAdmin = isSuperAdmin || currentUser.role === 'ADMIN' || currentUser.role === 'APPROVAL';
+
+  // Get unique organizations from patients for filter dropdown
+  const orgOptions = useMemo(() => {
+    const orgs = Array.from(new Set(patients.map(p => p.orgName).filter(Boolean)));
+    return [{ id: 'all', value: 'all', label: 'सबै संस्थाहरू (All Organizations)' }, ...orgs.map(org => ({ id: org!, value: org!, label: org! }))];
+  }, [patients]);
+
   useEffect(() => {
     if (selectedDoseInfo) {
         try {
@@ -95,11 +105,10 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
     }
   }, [selectedDoseInfo]);
 
-  const isAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN' || currentUser.role === 'APPROVAL';
-
   const generateRegNo = () => {
     const fyClean = currentFiscalYear.replace('/', '');
-    const currentFYPatients = (patients || []).filter(p => p.fiscalYear === currentFiscalYear && p.regNo?.startsWith(`R-${fyClean}-`));
+    const myPatients = patients.filter(p => !isSuperAdmin || p.orgName === currentUser.organizationName);
+    const currentFYPatients = myPatients.filter(p => p.fiscalYear === currentFiscalYear && p.regNo?.startsWith(`R-${fyClean}-`));
     
     if (currentFYPatients.length === 0) return `R-${fyClean}-001`;
 
@@ -233,7 +242,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
       setIsProcessing(true);
       try {
           if (editingPatientId) {
-              // Only recalculate schedule if regimen changed
               const originalPatient = patients.find(p => p.id === editingPatientId);
               let finalSchedule = originalPatient?.schedule || [];
               if (originalPatient?.regimen !== formData.regimen || originalPatient?.regDateAd !== formData.regDateAd) {
@@ -289,7 +297,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           return;
       }
 
-      // STRICT VALIDATION: Given date cannot be before scheduled date (EXCEPT for Day 0)
       if (dose.day !== 0 && givenDateAd < dose.date) {
           alert(`त्रुटि: खोप लगाएको मिति निर्धारित मिति (${dose.date}) भन्दा अगाडि हुन सक्दैन।`);
           return;
@@ -328,10 +335,17 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           if (!p) return false;
           const matchesFY = showAllYears || (p.fiscalYear === currentFiscalYear);
           if (!matchesFY) return false;
+          
+          // Organization Filter for Super Admin
+          if (isSuperAdmin && filterOrg !== 'all') {
+              if (p.orgName !== filterOrg) return false;
+          }
+
           const search = searchTerm.toLowerCase().trim();
           const matchesSearch = !search || 
                                 p.name?.toLowerCase().includes(search) || 
                                 p.regNo?.toLowerCase().includes(search) ||
+                                (p.orgName && p.orgName.toLowerCase().includes(search)) ||
                                 p.phone?.includes(search);
           if (!matchesSearch) return false;
           if (filterType === 'today') {
@@ -340,7 +354,7 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           return true;
       });
       return result.sort((a, b) => b.id.localeCompare(a.id));
-  }, [patients, searchTerm, filterType, currentFiscalYear, showAllYears]);
+  }, [patients, searchTerm, filterType, filterOrg, currentFiscalYear, showAllYears, isSuperAdmin]);
 
   const scheduledDateBs = useMemo(() => {
     if (!selectedDoseInfo) return '';
@@ -363,7 +377,9 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
             </div>
             <div>
                 <h2 className="text-xl font-bold text-slate-800 font-nepali">रेबिज़ खोप क्लिनिक (Rabies Vaccine Clinic)</h2>
-                <p className="text-sm text-slate-500 font-nepali">{editingPatientId ? 'बिरामीको विवरण सच्याउँदै' : 'नयाँ बिरामी दर्ता र खोप तालिका व्यवस्थापन'}</p>
+                <p className="text-sm text-slate-500 font-nepali">
+                    {isSuperAdmin ? 'संस्थागत रेकर्ड अनुगमन (All Organizations)' : (editingPatientId ? 'बिरामीको विवरण सच्याउँदै' : 'नयाँ बिरामी दर्ता र खोप तालिका व्यवस्थापन')}
+                </p>
             </div>
         </div>
       </div>
@@ -375,45 +391,47 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           </div>
       )}
 
-      {/* Registration Form */}
-      <div className={`bg-white p-8 rounded-2xl border shadow-xl relative overflow-hidden no-print transition-all ${editingPatientId ? 'ring-2 ring-indigo-500 border-indigo-100' : 'border-slate-200'}`}>
-          {editingPatientId && (
-              <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500"></div>
-          )}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full -mr-16 -mt-16 opacity-50"></div>
-          <form onSubmit={handleSubmit} className="relative z-10 space-y-8">
-              <div className="grid md:grid-cols-4 gap-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
-                  <div className="md:col-span-1">
-                      <label className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-1">दर्ता नम्बर (Reg No)</label>
-                      <div className="bg-white border border-indigo-200 rounded-lg px-3 py-2 font-mono text-lg font-black text-indigo-700 shadow-inner">{formData.regNo}</div>
-                  </div>
-                  <NepaliDatePicker label="दर्ता मिति (BS) *" value={formData.regDateBs} onChange={handleRegDateBsChange} required />
-                  <Select label="दर्ता महिना" value={formData.regMonth} onChange={e => setFormData({...formData, regMonth: e.target.value})} options={nepaliMonthOptions} icon={<CalendarRange size={16} />} />
-                  <Input label="अंग्रेजी मिति (AD)" value={formData.regDateAd} readOnly className="bg-slate-100 text-slate-400 font-mono" icon={<Calendar size={16} />} />
-              </div>
+      {/* Registration Form - Hidden for Super Admin if not registering themselves */}
+      {!isSuperAdmin && (
+        <div className={`bg-white p-8 rounded-2xl border shadow-xl relative overflow-hidden no-print transition-all ${editingPatientId ? 'ring-2 ring-indigo-500 border-indigo-100' : 'border-slate-200'}`}>
+            {editingPatientId && (
+                <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500"></div>
+            )}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full -mr-16 -mt-16 opacity-50"></div>
+            <form onSubmit={handleSubmit} className="relative z-10 space-y-8">
+                <div className="grid md:grid-cols-4 gap-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+                    <div className="md:col-span-1">
+                        <label className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-1">दर्ता नम्बर (Reg No)</label>
+                        <div className="bg-white border border-indigo-200 rounded-lg px-3 py-2 font-mono text-lg font-black text-indigo-700 shadow-inner">{formData.regNo}</div>
+                    </div>
+                    <NepaliDatePicker label="दर्ता मिति (BS) *" value={formData.regDateBs} onChange={handleRegDateBsChange} required />
+                    <Select label="दर्ता महिना" value={formData.regMonth} onChange={e => setFormData({...formData, regMonth: e.target.value})} options={nepaliMonthOptions} icon={<CalendarRange size={16} />} />
+                    <Input label="अंग्रेजी मिति (AD)" value={formData.regDateAd} readOnly className="bg-slate-100 text-slate-400 font-mono" icon={<Calendar size={16} />} />
+                </div>
 
-              <div className="grid md:grid-cols-3 gap-6">
-                  <Input label="बिरामीको नाम *" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required placeholder="Full Name" icon={<User size={18} />} />
-                  <div className="grid grid-cols-2 gap-4">
-                      <Input label="उमेर *" value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} required placeholder="Yr" type="number" />
-                      <Select label="लिङ्ग *" value={formData.sex} onChange={e => setFormData({...formData, sex: e.target.value})} options={[{id: 'm', value: 'Male', label: 'पुरुष'}, {id: 'f', value: 'Female', label: 'महिला'}, {id: 'o', value: 'Other', label: 'अन्य'}]} required />
-                  </div>
-                  <Input label="सम्पर्क नं" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="98XXXXXXXX" icon={<Phone size={18} />} />
-                  <Input label="ठेगाना *" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} required placeholder="Municipality-Ward" icon={<MapPin size={18} />} />
-                  <Select label="टोक्ने जनावर *" value={formData.animalType} onChange={e => setFormData({...formData, animalType: e.target.value})} options={animalTypeOptions} required />
-                  <Select label="WHO Category *" value={formData.exposureCategory} onChange={e => setFormData({...formData, exposureCategory: e.target.value})} options={whoCategoryOptions} required icon={<AlertTriangle size={18} />} />
-                  <div className="md:col-span-2"><Select label="खोप लगाउने तरिका (Regimen) *" value={formData.regimen} onChange={e => setFormData({...formData, regimen: e.target.value as any})} options={regimenOptions} required icon={<Activity size={18} />} /></div>
-                  <Input label="टोकेको ठाउँ (Body Part)" value={formData.bodyPart} onChange={e => setFormData({...formData, bodyPart: e.target.value})} placeholder="e.g. Leg, Hand" />
-              </div>
+                <div className="grid md:grid-cols-3 gap-6">
+                    <Input label="बिरामीको नाम *" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required placeholder="Full Name" icon={<User size={18} />} />
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input label="उमेर *" value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} required placeholder="Yr" type="number" />
+                        <Select label="लिङ्ग *" value={formData.sex} onChange={e => setFormData({...formData, sex: e.target.value})} options={[{id: 'm', value: 'Male', label: 'पुरुष'}, {id: 'f', value: 'Female', label: 'महिला'}, {id: 'o', value: 'Other', label: 'अन्य'}]} required />
+                    </div>
+                    <Input label="सम्पर्क नं" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="98XXXXXXXX" icon={<Phone size={18} />} />
+                    <Input label="ठेगाना *" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} required placeholder="Municipality-Ward" icon={<MapPin size={18} />} />
+                    <Select label="टोक्ने जनावर *" value={formData.animalType} onChange={e => setFormData({...formData, animalType: e.target.value})} options={animalTypeOptions} required />
+                    <Select label="WHO Category *" value={formData.exposureCategory} onChange={e => setFormData({...formData, exposureCategory: e.target.value})} options={whoCategoryOptions} required icon={<AlertTriangle size={18} />} />
+                    <div className="md:col-span-2"><Select label="खोप लगाउने तरिका (Regimen) *" value={formData.regimen} onChange={e => setFormData({...formData, regimen: e.target.value as any})} options={regimenOptions} required icon={<Activity size={18} />} /></div>
+                    <Input label="टोकेको ठाउँ (Body Part)" value={formData.bodyPart} onChange={e => setFormData({...formData, bodyPart: e.target.value})} placeholder="e.g. Leg, Hand" />
+                </div>
 
-              <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">
-                  <button type="button" disabled={isProcessing} className="px-6 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl flex items-center gap-2 font-bold" onClick={handleReset}><RotateCcw size={20} /> {editingPatientId ? 'रद्द गर्नुहोस्' : 'रिसेट'}</button>
-                  <button type="submit" disabled={isProcessing} className={`px-10 py-2.5 text-white rounded-xl shadow-lg flex items-center gap-2 font-bold transition-all active:scale-95 disabled:opacity-50 font-nepali ${editingPatientId ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
-                      <Save size={20} /> {editingPatientId ? 'अपडेट गर्नुहोस्' : 'दर्ता गर्नुहोस्'}
-                  </button>
-              </div>
-          </form>
-      </div>
+                <div className="pt-6 border-t border-slate-100 flex justify-end gap-3">
+                    <button type="button" disabled={isProcessing} className="px-6 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl flex items-center gap-2 font-bold" onClick={handleReset}><RotateCcw size={20} /> {editingPatientId ? 'रद्द गर्नुहोस्' : 'रिसेट'}</button>
+                    <button type="submit" disabled={isProcessing} className={`px-10 py-2.5 text-white rounded-xl shadow-lg flex items-center gap-2 font-bold transition-all active:scale-95 disabled:opacity-50 font-nepali ${editingPatientId ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
+                        <Save size={20} /> {editingPatientId ? 'अपडेट गर्नुहोस्' : 'दर्ता गर्नुहोस्'}
+                    </button>
+                </div>
+            </form>
+        </div>
+      )}
 
       {/* Patients List Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-lg">
@@ -423,24 +441,47 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
                   <h3 className="font-bold text-slate-700 font-nepali text-lg">बिरामी खोप अभिलेख (Clinic Records)</h3>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[10px] bg-indigo-100 text-indigo-700 w-fit px-3 py-1 rounded-full font-black uppercase">{filteredPatients.length} Records</span>
+                    {isSuperAdmin && <span className="text-[10px] bg-green-100 text-green-700 px-3 py-1 rounded-full font-black uppercase">Global View</span>}
                   </div>
                 </div>
-                <div className="flex bg-slate-200/50 p-1 rounded-xl no-print">
-                   <button onClick={() => setFilterType('all')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filterType === 'all' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}><List size={14} /> सबै</button>
-                   <button onClick={() => setFilterType('today')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filterType === 'today' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500'}`}><Clock size={14} /> आज</button>
+                
+                {/* Filters */}
+                <div className="flex flex-wrap gap-2 no-print">
+                   <div className="flex bg-slate-200/50 p-1 rounded-xl">
+                      <button onClick={() => setFilterType('all')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filterType === 'all' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}><List size={14} /> सबै</button>
+                      <button onClick={() => setFilterType('today')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filterType === 'today' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500'}`}><Clock size={14} /> आज</button>
+                   </div>
+                   
+                   {isSuperAdmin && (
+                       <div className="w-64">
+                           <Select 
+                                label="" 
+                                options={orgOptions} 
+                                value={filterOrg} 
+                                onChange={e => setFilterOrg(e.target.value)} 
+                                icon={<Building2 size={14} />}
+                                className="!py-1.5 !text-xs"
+                                placeholder="संस्था अनुसार फिल्टर"
+                           />
+                       </div>
+                   )}
+
+                   <button onClick={() => setShowAllYears(!showAllYears)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all no-print ${showAllYears ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}><Globe size={14} /> {showAllYears ? 'सबै वर्ष' : 'यो वर्ष'}</button>
                 </div>
-                <button onClick={() => setShowAllYears(!showAllYears)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all no-print ${showAllYears ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}><Globe size={14} /> {showAllYears ? 'सबै वर्ष' : 'यो वर्ष'}</button>
               </div>
+              
               <div className="relative w-full lg:w-80 no-print">
                   <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input type="text" placeholder="नाम, फोन वा दर्ता नं..." className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                  <input type="text" placeholder="नाम, फोन, संस्था वा दर्ता नं..." className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
               </div>
           </div>
+          
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px]">
                   <tr>
                       <th className="px-8 py-4">दर्ता नं / वर्ष</th>
+                      {isSuperAdmin && <th className="px-8 py-4">संस्था (Organization)</th>}
                       <th className="px-8 py-4">बिरामी विवरण</th>
                       <th className="px-8 py-4">जनावर / Category</th>
                       <th className="px-8 py-4">खोप तालिका (Status)</th>
@@ -449,17 +490,31 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-100">
                   {filteredPatients.length === 0 ? (
-                      <tr><td colSpan={isAdmin ? 5 : 4} className="px-8 py-20 text-center text-slate-400 font-nepali"><div className="flex flex-col items-center gap-3"><Search size={48} className="text-slate-200" /><p className="font-bold text-slate-500">कुनै बिरामी फेला परेन।</p></div></td></tr>
+                      <tr><td colSpan={isSuperAdmin ? 6 : 5} className="px-8 py-20 text-center text-slate-400 font-nepali"><div className="flex flex-col items-center gap-3"><Search size={48} className="text-slate-200" /><p className="font-bold text-slate-500">कुनै बिरामी फेला परेन।</p></div></td></tr>
                   ) : (
                       filteredPatients.map(p => (
                           <tr key={p.id} className="hover:bg-slate-50/80 transition-colors group">
                               <td className="px-8 py-4"><div className="font-mono font-bold text-indigo-600">#{p.regNo}</div><div className="text-[9px] text-slate-400 font-bold">{p.fiscalYear}</div></td>
+                              {isSuperAdmin && (
+                                  <td className="px-8 py-4">
+                                      <div className="flex items-center gap-2 font-bold text-slate-700">
+                                          <Building2 size={12} className="text-indigo-400" />
+                                          <span className="truncate max-w-[150px]">{p.orgName || 'N/A'}</span>
+                                      </div>
+                                  </td>
+                              )}
                               <td className="px-8 py-4"><div className="font-bold text-slate-800">{p.name}</div><div className="text-[10px] text-slate-400">{p.age} Yrs | {p.sex} | {p.phone}</div></td>
                               <td className="px-8 py-4"><div className="text-slate-700 font-medium">{p.animalType}</div><div className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black border uppercase mt-1 ${p.exposureCategory === 'Category III' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>{p.exposureCategory}</div></td>
                               <td className="px-8 py-4"><div className="flex items-center gap-2">{(p.schedule || []).map((dose, idx) => {
                                   const isToday = dose.date === new Date().toISOString().split('T')[0];
                                   return (
-                                    <button key={idx} type="button" onClick={() => setSelectedDoseInfo({ patient: p, doseIndex: idx, dose })} className={`flex flex-col items-center justify-center w-12 h-14 rounded-xl border transition-all ${dose.status === 'Given' ? 'bg-green-50 border-green-200 text-green-700' : isToday ? 'bg-orange-50 border-orange-300 text-orange-700 animate-pulse' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                                    <button 
+                                        key={idx} 
+                                        type="button" 
+                                        onClick={() => (!isSuperAdmin || p.orgName === currentUser.organizationName) && setSelectedDoseInfo({ patient: p, doseIndex: idx, dose })} 
+                                        className={`flex flex-col items-center justify-center w-12 h-14 rounded-xl border transition-all ${dose.status === 'Given' ? 'bg-green-50 border-green-200 text-green-700' : isToday ? 'bg-orange-50 border-orange-300 text-orange-700 animate-pulse' : 'bg-slate-50 border-slate-200 text-slate-400'} ${(!isSuperAdmin || p.orgName === currentUser.organizationName) ? 'cursor-pointer hover:shadow-md' : 'cursor-not-allowed opacity-80'}`}
+                                        title={(!isSuperAdmin || p.orgName === currentUser.organizationName) ? "Update Dose" : "View Only (Different Organization)"}
+                                    >
                                         <span className="text-[9px] font-black">D{dose.day}</span>
                                         {dose.status === 'Given' ? <CheckCircle2 size={16} /> : <Clock size={16} />}
                                         <span className="text-[8px] mt-0.5 font-bold">{(dose.date || '').split('-').slice(1).join('/')}</span>
@@ -468,10 +523,14 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
                               })}</div></td>
                               {isAdmin && (
                                   <td className="px-8 py-4 text-right no-print">
-                                      <div className="flex justify-end gap-2">
-                                          <button onClick={() => handleEditPatient(p)} className="text-slate-400 hover:text-indigo-600 p-2 rounded-lg hover:bg-indigo-50 transition-all" title="Edit Patient Info"><Pencil size={18} /></button>
-                                          <button onClick={() => handleDeleteClick(p)} className="text-slate-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-all" title="Delete Patient"><Trash2 size={18} /></button>
-                                      </div>
+                                      {(!isSuperAdmin || p.orgName === currentUser.organizationName) ? (
+                                          <div className="flex justify-end gap-2">
+                                              <button onClick={() => handleEditPatient(p)} className="text-slate-400 hover:text-indigo-600 p-2 rounded-lg hover:bg-indigo-50 transition-all" title="Edit Patient Info"><Pencil size={18} /></button>
+                                              <button onClick={() => handleDeleteClick(p)} className="text-slate-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-all" title="Delete Patient"><Trash2 size={18} /></button>
+                                          </div>
+                                      ) : (
+                                          <div className="flex justify-end pr-4"><ShieldCheck size={18} className="text-slate-300" title="Protected: View Only" /></div>
+                                      )}
                                   </td>
                               )}
                           </tr>

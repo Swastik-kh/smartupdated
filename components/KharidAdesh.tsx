@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { ShoppingCart, FilePlus, ChevronRight, ArrowLeft, Printer, Save, Calculator, CheckCircle2, Send, ShieldCheck, CheckCheck, Eye, FileText, Clock, Archive, AlertCircle, X } from 'lucide-react';
+import { ShoppingCart, FilePlus, ChevronRight, ArrowLeft, Printer, Save, Calculator, CheckCircle2, Send, ShieldCheck, CheckCheck, Eye, FileText, Clock, Archive, AlertCircle, X, Trash2 } from 'lucide-react';
 import { PurchaseOrderEntry, MagItem, User, FirmEntry, Option, QuotationEntry, OrganizationSettings } from '../types';
 import { FISCAL_YEARS } from '../constants';
 import { SearchableSelect } from './SearchableSelect';
@@ -194,8 +194,6 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
             return;
         }
 
-        // --- REMOVED STRICT DATE FORMAT VALIDATION ---
-        
         let nextStatus = selectedOrder.status;
         let successMessageText = "Saved successfully!";
 
@@ -269,6 +267,17 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
         setPoItems(newItems);
     };
 
+    const handleRemoveItem = (index: number) => {
+        if (poItems.length <= 1) {
+            alert("कम्तिमा एउटा सामान खरिद आदेशमा हुनुपर्छ। (At least one item must remain in PO)");
+            return;
+        }
+        if (window.confirm("के तपाईं यो सामान खरिद आदेशबाट हटाउन चाहनुहुन्छ?")) {
+            const newItems = poItems.filter((_, i) => i !== index);
+            setPoItems(newItems);
+        }
+    };
+
     const handleOrderDateChange = (val: string) => {
         setPoDetails(prev => ({
             ...prev, 
@@ -296,6 +305,7 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
     }).sort((a, b) => parseInt(b.magFormNo) - parseInt(a.magFormNo));
 
     const canEditVendor = isStoreKeeper && !isViewOnlyMode && selectedOrder?.status === 'Pending';
+    const canDeleteRow = isStoreKeeper && !isViewOnlyMode && selectedOrder?.status === 'Pending';
     
     let actionLabel = 'Save';
     let ActionIcon = Save;
@@ -472,6 +482,7 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
                                     <th className="border border-slate-900 p-2 w-16" rowSpan={2}>परिमाण</th>
                                     <th className="border border-slate-900 p-2" colSpan={2}>मूल्य(मू.अ.क. बाहेक)</th>
                                     <th className="border border-slate-900 p-2 w-24" rowSpan={2}>कैफियत</th>
+                                    {canDeleteRow && <th className="border border-slate-900 p-2 w-10 no-print" rowSpan={2}></th>}
                                 </tr>
                                 <tr className="bg-slate-50">
                                     <th className="border border-slate-900 p-1 w-20">सङ्केत नं</th>
@@ -504,12 +515,24 @@ export const KharidAdesh: React.FC<KharidAdeshProps> = ({ orders, currentFiscalY
                                         <td className="border border-slate-900 p-1">
                                             <input value={item.remarks} onChange={e => handleItemChange(index, 'remarks', e.target.value)} className="w-full text-center outline-none bg-transparent disabled:cursor-not-allowed" disabled={!canEditVendor} />
                                         </td>
+                                        {canDeleteRow && (
+                                            <td className="border border-slate-900 p-1 no-print">
+                                                <button 
+                                                    onClick={() => handleRemoveItem(index)}
+                                                    className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
+                                                    title="Remove Item"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                                 <tr className="font-bold">
                                     <td className="border border-slate-900 p-1 text-right pr-4" colSpan={8}>कुल जम्मा (Total)</td>
                                     <td className="border border-slate-900 p-1 text-right">{grandTotal.toFixed(2)}</td>
                                     <td className="border border-slate-900 p-1"></td>
+                                    {canDeleteRow && <td className="border border-slate-900 p-1 no-print"></td>}
                                 </tr>
                             </tbody>
                         </table>

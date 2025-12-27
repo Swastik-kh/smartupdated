@@ -153,11 +153,35 @@ const App: React.FC = () => {
     setupOrgListener('returnEntries', setReturnEntries);
     setupOrgListener('firms', setFirms);
     setupOrgListener('quotations', setQuotations);
-    setupOrgListener('rabiesPatients', setRabiesPatients);
     setupOrgListener('tbPatients', setTbPatients);
     setupOrgListener('marmatEntries', setMarmatEntries);
     setupOrgListener('disposalEntries', setDhuliyaunaEntries);
     setupOrgListener('logBook', setLogBookEntries);
+
+    // SPECIAL CASE: Super Admin Rabies Access - Loads all orgData
+    if (currentUser.role === 'SUPER_ADMIN') {
+        const allOrgRef = ref(db, 'orgData');
+        const unsub = onValue(allOrgRef, (snap) => {
+            const allData = snap.val() || {};
+            const combinedRabies: RabiesPatient[] = [];
+            Object.keys(allData).forEach(orgKey => {
+                const orgRabies = allData[orgKey].rabiesPatients;
+                if (orgRabies) {
+                    Object.keys(orgRabies).forEach(pKey => {
+                        combinedRabies.push({ 
+                            ...orgRabies[pKey], 
+                            id: pKey,
+                            orgName: orgKey.replace(/_/g, ' ') 
+                        });
+                    });
+                }
+            });
+            setRabiesPatients(combinedRabies);
+        });
+        unsubscribes.push(unsub);
+    } else {
+        setupOrgListener('rabiesPatients', setRabiesPatients);
+    }
 
     return () => unsubscribes.forEach(unsub => unsub());
   }, [currentUser]);

@@ -130,7 +130,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     return { 
       todayRabies, 
-      totalFutureDosesNeeded: totalFutureDosesNeeded * 2, 
+      totalFutureDosesNeeded: totalFutureDosesNeeded, 
       totalInventory: inventoryItems.length, 
       pendingMagForms: magForms.filter(f => f.status === 'Pending').length, 
       pendingStockReq: stockEntryRequests.filter(r => r.status === 'Pending').length 
@@ -191,15 +191,67 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div className="bg-primary-100 p-2 rounded-lg text-primary-600"><LayoutDashboard size={24} /></div>
                 <div><h2 className="text-xl font-bold text-slate-800 font-nepali">मुख्य ड्यासबोर्ड</h2><p className="text-xs text-slate-500 font-medium font-nepali">हालको अवस्था र तथ्याङ्क</p></div>
             </div>
+            
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-indigo-100 shadow-sm"><h3 className="text-2xl font-black text-slate-800">{stats.todayRabies}</h3><p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider">आजको रेबिज दर्ता</p></div>
-                <div className="bg-white p-5 rounded-2xl border border-rose-100 shadow-sm"><h3 className="text-2xl font-black text-slate-800">{stats.totalFutureDosesNeeded}</h3><p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider">बाँकी खोप डोजहरू</p></div>
-                <div className="bg-white p-5 rounded-2xl border border-orange-100 shadow-sm"><h3 className="text-2xl font-black text-slate-800">{stats.pendingMagForms}</h3><p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider">बाँकी माग फारम</p></div>
-                <div className="bg-white p-5 rounded-2xl border border-teal-100 shadow-sm"><h3 className="text-2xl font-black text-slate-800">{stats.pendingStockReq}</h3><p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider">स्टक दाखिला अनुरोध</p></div>
+                {/* Stat Card 1: Today Rabies */}
+                <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h3 className="text-2xl font-black text-slate-800">{stats.todayRabies}</h3>
+                            <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">आजको रेबिज दर्ता</p>
+                        </div>
+                        <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                            <Syringe size={20} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Stat Card 2: Future Doses */}
+                <div className="bg-white p-6 rounded-2xl border border-rose-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h3 className="text-2xl font-black text-slate-800">{stats.totalFutureDosesNeeded}</h3>
+                            <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">बाँकी खोप डोजहरू</p>
+                        </div>
+                        <div className="bg-rose-50 p-2.5 rounded-xl text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-colors">
+                            <Clock size={20} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Stat Card 3: Pending Mag Form */}
+                <div className="bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h3 className="text-2xl font-black text-slate-800">{stats.pendingMagForms}</h3>
+                            <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">बाँकी माग फारम</p>
+                        </div>
+                        <div className="bg-orange-50 p-2.5 rounded-xl text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                            <FilePlus size={20} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Stat Card 4: Pending Stock Req */}
+                <div className="bg-white p-6 rounded-2xl border border-teal-100 shadow-sm hover:shadow-md transition-all group">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h3 className="text-2xl font-black text-slate-800">{stats.pendingStockReq}</h3>
+                            <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">स्टक दाखिला अनुरोध</p>
+                        </div>
+                        <div className="bg-teal-50 p-2.5 rounded-xl text-teal-600 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                            <Warehouse size={20} />
+                        </div>
+                    </div>
+                </div>
             </div>
+
             <div className="bg-gradient-to-br from-primary-600 to-indigo-700 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
-                <div className="relative z-10"><h2 className="text-2xl font-black font-nepali mb-2">नमस्ते, {currentUser.fullName}!</h2><p className="text-primary-100 font-medium opacity-90 text-sm">स्मार्ट जिन्सी व्यवस्थापन प्रणालीमा तपाईंलाई स्वागत छ।</p></div>
+                <div className="relative z-10">
+                    <h2 className="text-2xl font-black font-nepali mb-2">नमस्ते, {currentUser.fullName}!</h2>
+                    <p className="text-primary-100 font-medium opacity-90 text-sm">स्मार्ट जिन्सी व्यवस्थापन प्रणालीमा तपाईंलाई स्वागत छ।</p>
+                </div>
             </div>
         </div>
       );
@@ -223,9 +275,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className="flex h-[100dvh] w-full bg-slate-50 font-sans overflow-hidden">
-      {isSidebarOpen && <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] md:hidden" onClick={() => setIsSidebarOpen(false)} />}
+      {/* Backdrop for all screen sizes when menu is open */}
+      {isSidebarOpen && (
+        <div 
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100]" 
+            onClick={() => setIsSidebarOpen(false)} 
+        />
+      )}
       
-      <aside className={`fixed md:relative z-[110] h-full bg-slate-900 text-white flex flex-col shadow-2xl transition-all duration-300 ease-in-out no-print ${isSidebarOpen ? 'translate-x-0 w-[280px]' : '-translate-x-full w-[280px] md:w-0 md:translate-x-0 md:overflow-hidden'}`}>
+      {/* Sidebar: Starts hidden on both Mobile and PC (-translate-x-full) */}
+      <aside className={`fixed z-[110] h-full bg-slate-900 text-white flex flex-col shadow-2xl transition-all duration-300 ease-in-out no-print 
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} w-[280px]`}>
+        
         <div className="p-6 border-b border-slate-800 flex items-center gap-3 bg-slate-950 shrink-0">
             <div className="bg-primary-600 p-2 rounded-lg"><Activity size={20} className="text-white" /></div>
             <div className="overflow-hidden">
@@ -258,10 +319,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </aside>
 
+      {/* Main Container: Full width since sidebar is fixed/overlay */}
       <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
         <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-4 md:px-8 shadow-sm z-50 shrink-0 no-print">
             <div className="flex items-center gap-3">
-                <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg"><Menu size={20} /></button>
+                {/* Menu Button: Always visible to open the hidden menu */}
+                <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                    <Menu size={20} />
+                </button>
                 <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-100 text-xs font-bold uppercase tracking-wider">
                     <Calendar size={12} /> {fiscalYearLabel}
                 </div>
