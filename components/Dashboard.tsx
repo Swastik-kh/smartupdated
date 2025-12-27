@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Syringe, Activity, 
   ClipboardList, FileSpreadsheet, FilePlus, ShoppingCart, FileOutput, 
   BookOpen, Book, Archive, RotateCcw, Wrench, Scroll, BarChart3,
-  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User
+  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User, Printer
 } from 'lucide-react';
 import { APP_NAME, ORG_NAME, FISCAL_YEARS } from '../constants';
 import { DashboardProps, PurchaseOrderEntry, InventoryItem, RabiesPatient } from '../types'; 
@@ -96,6 +96,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [pendingPoDakhila, setPendingPoDakhila] = useState<PurchaseOrderEntry | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [lastSeenNotificationId, setLastSeenNotificationId] = useState<string | null>(null);
 
   const latestApprovedDakhila = useMemo(() => {
@@ -116,7 +117,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const stats = useMemo(() => {
     const today = new NepaliDate();
     const todayStr = today.format('YYYY-MM-DD'); 
-    const todayAd = new Date().toISOString().split('T')[0];
+    const todayAd = new Date();
+    const todayAdStr = todayAd.toISOString().split('T')[0];
+    
+    const threeMonthsLaterAd = new Date();
+    threeMonthsLaterAd.setMonth(todayAd.getMonth() + 3);
     
     const todayRabiesReg = rabiesPatients.filter(p => p.regDateBs === todayStr).length;
     
@@ -127,14 +132,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     rabiesPatients.forEach(patient => {
         (patient.schedule || []).forEach(dose => {
-            const isScheduledToday = dose.date === todayAd;
-            const isGivenToday = dose.status === 'Given' && (dose.givenDate === todayAd || (isScheduledToday && !dose.givenDate));
+            const isScheduledToday = dose.date === todayAdStr;
+            const isGivenToday = dose.status === 'Given' && (dose.givenDate === todayAdStr || (isScheduledToday && !dose.givenDate));
 
             if (isScheduledToday) {
                 scheduledToday++;
             }
             
-            // Include in modal if either scheduled for today OR already given today
             if (isScheduledToday || isGivenToday) {
                 if (isGivenToday) {
                     visitedToday++;
@@ -152,11 +156,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
         });
     });
 
-    // Sort: Pending patients first, then those who received the vaccine
     patientsForToday.sort((a, b) => {
         if (a.status === 'Pending' && b.status === 'Given') return -1;
         if (a.status === 'Given' && b.status === 'Pending') return 1;
         return a.patient.name.localeCompare(b.patient.name);
+    });
+
+    // Expiry Logic: Find items expiring within 3 months (90 days)
+    const expiringSoonItems = inventoryItems.filter(item => {
+        if (!item.expiryDateAd || item.currentQuantity <= 0) return false;
+        const expiryDate = new Date(item.expiryDateAd);
+        return expiryDate >= todayAd && expiryDate <= threeMonthsLaterAd;
     });
     
     const vials1mlNeeded = Math.ceil(totalFutureDosesNeeded / 5);
@@ -170,6 +180,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       vials1mlNeeded,
       vials05mlNeeded,
       patientsForToday,
+      expiringSoonItems,
       totalInventory: inventoryItems.length, 
       pendingMagForms: magForms.filter(f => f.status === 'Pending').length, 
       pendingStockReq: stockEntryRequests.filter(r => r.status === 'Pending').length 
@@ -226,14 +237,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     switch (activeItem) {
       case 'dashboard': return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4 no-print">
                 <div className="flex items-center gap-3">
                   <div className="bg-primary-100 p-2 rounded-lg text-primary-600"><LayoutDashboard size={24} /></div>
                   <div><h2 className="text-xl font-bold text-slate-800 font-nepali">मुख्य ड्यासबोर्ड</h2><p className="text-xs text-slate-500 font-medium font-nepali">हालको अवस्था र तथ्याङ्क</p></div>
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 no-print">
                 {/* Stat Card 1: Today Rabies Registration */}
                 <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm hover:shadow-md transition-all group">
                     <div className="flex justify-between items-start">
@@ -247,7 +258,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                 </div>
 
-                {/* Stat Card 2: Today's Vaccination Attendance (Clickable) */}
+                {/* Stat Card 2: Today's Vaccination Attendance */}
                 <div 
                   onClick={() => setShowAttendanceModal(true)}
                   className="bg-white p-6 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-all group cursor-pointer active:scale-95"
@@ -266,43 +277,41 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 ></div>
                             </div>
                         </div>
-                        <div className="bg-emerald p-2.5 rounded-xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                        <div className="bg-emerald-50 p-2.5 rounded-xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                             <CalendarCheck size={20} />
                         </div>
                     </div>
                 </div>
 
-                {/* Stat Card 3: Vials Needed */}
-                <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition-all group">
+                {/* Stat Card 3: Expiry Alerts */}
+                <div 
+                  onClick={() => setShowExpiryModal(true)}
+                  className="bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-all group cursor-pointer active:scale-95"
+                >
                     <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                            <p className="text-[10px] font-black text-slate-400 font-nepali uppercase tracking-wider mb-2">आवश्यक खोप भायल</p>
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between border-b border-blue-50 pb-1">
-                                    <span className="text-xs font-bold text-slate-600">1 ml Vial:</span>
-                                    <span className="text-lg font-black text-blue-600">{stats.vials1mlNeeded}</span>
+                        <div>
+                            <h3 className="text-2xl font-black text-orange-600">{stats.expiringSoonItems.length}</h3>
+                            <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">३ महिनाभित्र म्याद सकिने</p>
+                            {stats.expiringSoonItems.length > 0 && (
+                                <div className="mt-2 flex items-center gap-1 text-[10px] text-orange-600 font-bold animate-pulse">
+                                    <AlertTriangle size={10} /> तत्काल जाँच गर्नुहोस्
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-slate-600">0.5 ml Vial:</span>
-                                    <span className="text-lg font-black text-blue-600">{stats.vials05mlNeeded}</span>
-                                </div>
-                            </div>
-                            <p className="text-[9px] text-slate-400 font-medium italic mt-2">(Total {stats.totalFutureDosesNeeded} Pending)</p>
+                            )}
                         </div>
-                        <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors ml-2">
-                            <Pill size={20} />
+                        <div className="bg-orange-50 p-2.5 rounded-xl text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                            <Clock size={20} />
                         </div>
                     </div>
                 </div>
 
                 {/* Stat Card 4: Pending Mag Form */}
-                <div className="bg-white p-6 rounded-2xl border border-orange-100 shadow-sm hover:shadow-md transition-all group">
+                <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition-all group">
                     <div className="flex justify-between items-start">
                         <div>
                             <h3 className="text-2xl font-black text-slate-800">{stats.pendingMagForms}</h3>
                             <p className="text-[11px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">बाँकी माग फारम</p>
                         </div>
-                        <div className="bg-orange-50 p-2.5 rounded-xl text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                        <div className="bg-blue-50 p-2.5 rounded-xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                             <FilePlus size={20} />
                         </div>
                     </div>
@@ -322,7 +331,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
             </div>
 
-            <div className="bg-gradient-to-br from-primary-600 to-indigo-700 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden">
+            <div className="bg-gradient-to-br from-primary-600 to-indigo-700 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden no-print">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
                 <div className="relative z-10">
                     <h2 className="text-2xl font-black font-nepali mb-2">नमस्ते, {currentUser.fullName}!</h2>
@@ -332,7 +341,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             {/* Attendance Detail Modal */}
             {showAttendanceModal && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 no-print">
                     <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setShowAttendanceModal(false)}></div>
                     <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
                         <div className="px-6 py-5 border-b bg-emerald-50 text-emerald-800 flex justify-between items-center">
@@ -407,6 +416,114 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                 </div>
             )}
+
+            {/* Expiry Alert Modal */}
+            {showExpiryModal && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in no-print" onClick={() => setShowExpiryModal(false)}></div>
+                    <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                        <div className="px-6 py-5 border-b bg-orange-50 text-orange-800 flex justify-between items-center no-print">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-orange-100 p-2 rounded-xl text-orange-600">
+                                    <AlertTriangle size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold font-nepali text-lg">म्याद सकिने विवरण (Expiry Warning)</h3>
+                                    <p className="text-xs text-orange-600 font-medium">अर्को ३ महिनाभित्र म्याद सकिने सामानहरूको सूची</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowExpiryModal(false)} className="p-2 hover:bg-orange-100 rounded-full transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        
+                        {/* Printable Area Wrapper */}
+                        <div id="expiry-report-area" className="flex-1 overflow-auto max-h-[70vh] p-0 print:max-h-none print:overflow-visible">
+                            <div className="hidden print:block text-center mb-8 p-8">
+                                <h1 className="text-xl font-bold text-red-600 mb-1">{generalSettings.orgNameNepali}</h1>
+                                <h2 className="text-lg font-bold underline underline-offset-4 font-nepali">म्याद सकिने सामानहरूको प्रतिवेदन</h2>
+                                <p className="text-sm mt-2 font-medium">अर्को ३ महिनाभित्र म्याद सकिने सामानहरूको विवरण</p>
+                                <div className="flex justify-between mt-4 text-xs font-bold border-t border-slate-200 pt-2">
+                                    <span>प्रतिवेदन मिति: {new NepaliDate().format('YYYY/MM/DD')}</span>
+                                    <span>आर्थिक वर्ष: {currentFiscalYear}</span>
+                                </div>
+                            </div>
+
+                            {stats.expiringSoonItems.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-20 text-slate-400 no-print">
+                                    <CheckCircle2 size={64} className="opacity-20 mb-4 text-green-500" />
+                                    <p className="font-nepali text-xl font-bold">सबै ठिक छ!</p>
+                                    <p className="text-sm">अर्को ३ महिनाभित्र म्याद सकिने कुनै सामान छैन।</p>
+                                </div>
+                            ) : (
+                                <table className="w-full text-sm text-left border-collapse print:text-[10px]">
+                                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] sticky top-0 print:relative">
+                                        <tr>
+                                            <th className="px-6 py-4 border-b print:px-2 print:py-2">सामानको नाम</th>
+                                            <th className="px-6 py-4 border-b print:px-2 print:py-2">स्टोर (Store)</th>
+                                            <th className="px-6 py-4 border-b print:px-2 print:py-2">ब्याच नं</th>
+                                            <th className="px-6 py-4 border-b print:px-2 print:py-2">बाँकी परिमाण</th>
+                                            <th className="px-6 py-4 border-b print:px-2 print:py-2">म्याद सकिने मिति (BS)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {stats.expiringSoonItems.map((item, idx) => (
+                                            <tr key={idx} className="hover:bg-orange-50/30 transition-colors print:hover:bg-transparent">
+                                                <td className="px-6 py-4 print:px-2 print:py-2">
+                                                    <div className="font-bold text-slate-800">{item.itemName}</div>
+                                                    <div className="text-[10px] text-slate-400 font-mono">{item.uniqueCode || item.sanketNo}</div>
+                                                </td>
+                                                <td className="px-6 py-4 print:px-2 print:py-2">
+                                                    <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded print:bg-transparent print:p-0">
+                                                        {stores.find(s => s.id === item.storeId)?.name || 'N/A'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 font-mono text-slate-600 print:px-2 print:py-2">{item.batchNo || '-'}</td>
+                                                <td className="px-6 py-4 print:px-2 print:py-2">
+                                                    <span className="font-black text-slate-800">{item.currentQuantity}</span>
+                                                    <span className="ml-1 text-[10px] text-slate-400 uppercase">{item.unit}</span>
+                                                </td>
+                                                <td className="px-6 py-4 print:px-2 print:py-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-3 py-1 bg-red-50 text-red-600 rounded-full text-xs font-black border border-red-100 print:bg-transparent print:border-none print:p-0">
+                                                            {item.expiryDateBs || 'N/A'}
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-400 font-mono no-print">({item.expiryDateAd})</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                            
+                            <div className="hidden print:grid grid-cols-2 gap-20 mt-16 p-8 text-sm">
+                                <div className="text-center">
+                                    <div className="border-t border-slate-800 pt-1">तयार गर्ने</div>
+                                </div>
+                                <div className="text-center">
+                                    <div className="border-t border-slate-800 pt-1">स्वीकृत गर्ने</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 bg-slate-50 border-t flex justify-end gap-3 no-print">
+                            <button 
+                                onClick={() => setShowExpiryModal(false)}
+                                className="px-6 py-2 bg-slate-200 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-300 transition-all"
+                            >
+                                बन्द गर्नुहोस्
+                            </button>
+                            <button 
+                                onClick={() => window.print()}
+                                className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2"
+                            >
+                                <Printer size={16} /> विवरण प्रिन्ट गर्नुहोस्
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
       );
       case 'general_setting': return <GeneralSetting settings={generalSettings} onUpdateSettings={onUpdateGeneralSettings} />;
@@ -432,7 +549,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* Backdrop for all screen sizes when menu is open */}
       {isSidebarOpen && (
         <div 
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100]" 
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] no-print" 
             onClick={() => setIsSidebarOpen(false)} 
         />
       )}
@@ -501,8 +618,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
         </header>
 
-        <main className="flex-1 custom-scrollbar bg-slate-50/30 p-4 md:p-6">
-             <div className="max-w-7xl mx-auto pb-20">
+        <main className="flex-1 custom-scrollbar bg-slate-50/30 p-4 md:p-6 print:p-0 print:bg-white print:overflow-visible">
+             <div className="max-w-7xl mx-auto pb-20 print:pb-0">
                 {renderContent()}
              </div>
         </main>
