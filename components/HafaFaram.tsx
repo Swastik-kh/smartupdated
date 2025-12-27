@@ -206,7 +206,7 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                     <div className="bg-white rounded-xl border border-orange-200 shadow-sm overflow-hidden mb-6">
                         <div className="bg-orange-50 px-6 py-3 border-b border-orange-100 flex justify-between items-center text-orange-800">
                             <div className="flex items-center gap-2"><Clock size={18} /><h3 className="font-bold font-nepali">स्वीकृतिको लागि बाँकी (Actionable)</h3></div>
-                            <span className="bg-orange-200 text-xs font-bold px-2 py-0.5 rounded-full">{actionableEntries.length} Forms</span>
+                            <span className="bg-orange-200 text-orange-800 text-xs font-bold px-2 py-0.5 rounded-full">{actionableEntries.length} Forms</span>
                         </div>
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-50 text-slate-600 font-medium">
@@ -266,6 +266,35 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
 
     return (
         <div className="space-y-6">
+            <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                    @page {
+                        size: A4 landscape;
+                        margin: 10mm;
+                    }
+                    body {
+                        background: white !important;
+                    }
+                    .no-print {
+                        display: none !important;
+                    }
+                    #hastantaran-print-container {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        width: 100% !important;
+                        max-width: none !important;
+                        box-shadow: none !important;
+                        border: none !important;
+                    }
+                    table {
+                        font-size: 9px !important;
+                    }
+                    th, td {
+                        padding: 2px !important;
+                    }
+                }
+            `}} />
+            
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm no-print">
                 <div className="flex items-center gap-3">
                     <button onClick={handleReset} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"><ArrowLeft size={20} /></button>
@@ -296,7 +325,7 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                 </div>
             )}
 
-            <div className="bg-white p-6 md:p-10 max-w-[297mm] mx-auto min-h-[210mm] font-nepali text-slate-900 border shadow-lg rounded-xl print:p-0 print:shadow-none print:border-none print:w-full">
+            <div id="hastantaran-print-container" className="bg-white p-6 md:p-10 max-w-[297mm] mx-auto min-h-[210mm] font-nepali text-slate-900 border shadow-lg rounded-xl print:p-0 print:shadow-none print:border-none print:w-full">
                 <div className="text-right font-bold text-[10px] mb-2">म.ले.प.फारम नं: ४०६</div>
                 
                 <div className="mb-6">
@@ -318,92 +347,88 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                         </div>
                         <div className="w-24"></div> 
                     </div>
-                    <div className="text-center mt-6">
+                    <div className="text-center mt-4">
                         <h2 className="text-lg font-bold underline underline-offset-4">हस्तान्तरण फाराम</h2>
                     </div>
                 </div>
 
-                <div className="text-sm space-y-4 mb-6">
-                    <p>यस कार्यालयबाट तपसिल अनुसारको सम्पत्ति तथा जिन्सी मालसामान हस्तान्तरण गरिएको छ।</p>
+                <div className="text-sm space-y-3 mb-4">
+                    <p className="text-xs">यस कार्यालयबाट तपसिल अनुसारको सम्पत्ति तथा जिन्सी मालसामान हस्तान्तरण गरिएको छ।</p>
                     
                     <div className="grid grid-cols-12 gap-x-4 gap-y-2">
                         <div className="col-span-8 space-y-2">
-                            <div className="flex gap-2"><span>सम्पत्ति तथा जिन्सी मालसामान हस्तान्तरणको</span></div>
-                            <div className="flex gap-2"><span>निर्णय नं.:</span><input value={formDetails.decisionNo} onChange={e => setFormDetails({...formDetails, decisionNo: e.target.value})} disabled={isViewOnly} className={`${inputClass} flex-1`} /></div>
-                            <div className="flex gap-2"><span>निर्णय मिति:</span><NepaliDatePicker value={formDetails.decisionDate} onChange={val => setFormDetails({...formDetails, decisionDate: val})} format="YYYY/MM/DD" hideIcon={true} label="" inputClassName="border-b border-dotted w-32 p-0 h-auto font-bold" disabled={isViewOnly}/></div>
-                            <div className="flex gap-2"><span>प्राप्त गर्ने कार्यालयको नाम:</span><input value={formDetails.recipientOrg} onChange={e => setFormDetails({...formDetails, recipientOrg: e.target.value})} disabled={isViewOnly} className={`${inputClass} flex-1 font-bold text-primary-700`} /></div>
+                            <div className="flex gap-2 items-center">
+                                <span className="font-bold text-xs">निर्णय नं.:</span>
+                                <input value={formDetails.decisionNo} onChange={e => setFormDetails({...formDetails, decisionNo: e.target.value})} disabled={isViewOnly} className={`${inputClass} flex-1 text-xs`} />
+                                <span className="font-bold text-xs ml-2">निर्णय मिति:</span>
+                                <NepaliDatePicker value={formDetails.decisionDate} onChange={val => setFormDetails({...formDetails, decisionDate: val})} format="YYYY/MM/DD" hideIcon={true} label="" inputClassName="border-b border-dotted w-28 p-0 h-auto font-bold text-xs" disabled={isViewOnly}/>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                                <span className="font-bold text-xs">प्राप्त गर्ने कार्यालयको नाम:</span>
+                                <input value={formDetails.recipientOrg} onChange={e => setFormDetails({...formDetails, recipientOrg: e.target.value})} disabled={isViewOnly} className={`${inputClass} flex-1 font-bold text-primary-700 text-xs`} />
+                            </div>
                         </div>
                         <div className="col-span-4 text-right space-y-2">
-                            <div className="flex justify-end gap-2"><span>हस्तान्तरण गरिएको मिति:</span><span className="border-b border-dotted border-slate-800 px-1 font-bold">{formDetails.date}</span></div>
-                            <div className="flex justify-end gap-2"><span>हस्तान्तरण फाराम नं.:</span><span className="border-b border-dotted border-slate-800 px-1 font-bold text-red-600">{formDetails.formNo}</span></div>
+                            <div className="flex justify-end gap-2 text-xs"><span>हस्तान्तरण गरिएको मिति:</span><span className="border-b border-dotted border-slate-800 px-1 font-bold">{formDetails.date}</span></div>
+                            <div className="flex justify-end gap-2 text-xs"><span>हस्तान्तरण फाराम नं.:</span><span className="border-b border-dotted border-slate-800 px-1 font-bold text-red-600">{formDetails.formNo}</span></div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-6 mt-4 font-bold">
-                        <span>सम्पत्ति तथा जिन्सी मालसामानको प्रकार:</span>
+                    <div className="flex items-center gap-6 mt-2 font-bold text-xs">
+                        <span>जिन्सी मालसामानको प्रकार:</span>
                         <div className="flex items-center gap-4">
                             <button onClick={() => !isViewOnly && setFormDetails({...formDetails, itemType: 'Expendable'})} className="flex items-center gap-1.5 cursor-pointer">
-                                {formDetails.itemType === 'Expendable' ? <CheckCircle2 size={16} className="text-primary-600"/> : <div className="w-4 h-4 border border-slate-800 rounded-sm"></div>}
+                                {formDetails.itemType === 'Expendable' ? <CheckCircle2 size={14} className="text-primary-600"/> : <div className="w-3 h-3 border border-slate-800 rounded-sm"></div>}
                                 <span>जिन्सी मालसामान (खर्च भएर जाने)</span>
                             </button>
                             <button onClick={() => !isViewOnly && setFormDetails({...formDetails, itemType: 'Non-Expendable'})} className="flex items-center gap-1.5 cursor-pointer">
-                                {formDetails.itemType === 'Non-Expendable' ? <CheckCircle2 size={16} className="text-primary-600"/> : <div className="w-4 h-4 border border-slate-800 rounded-sm"></div>}
+                                {formDetails.itemType === 'Non-Expendable' ? <CheckCircle2 size={14} className="text-primary-600"/> : <div className="w-3 h-3 border border-slate-800 rounded-sm"></div>}
                                 <span>सम्पत्ति (खर्च भएर नजाने)</span>
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <table className="w-full border-collapse border border-slate-900 text-center text-[10px]">
+                <table className="w-full border-collapse border border-slate-900 text-center text-[9px]">
                     <thead>
                         <tr className="bg-slate-50 font-bold">
                             <th className="border border-slate-900 p-1 w-8" rowSpan={2}>क्र.सं.</th>
                             <th className="border border-slate-900 p-1" colSpan={5}>सम्पत्ति तथा जिन्सी मालसामानको</th>
-                            <th className="border border-slate-900 p-1 w-12" rowSpan={2}>एकाई</th>
-                            <th className="border border-slate-900 p-1 w-12" rowSpan={2}>परिमाण</th>
-                            <th className="border border-slate-900 p-1 w-16" rowSpan={2}>दर</th>
-                            <th className="border border-slate-900 p-1 w-20" rowSpan={2}>जम्मा मूल्य (१० = ८x९)</th>
-                            <th className="border border-slate-900 p-1 w-20" rowSpan={2}>शुरु प्राप्त मिति</th>
-                            <th className="border border-slate-900 p-1 w-24" rowSpan={2}>भौतिक अवस्था</th>
+                            <th className="border border-slate-900 p-1 w-10" rowSpan={2}>एकाई</th>
+                            <th className="border border-slate-900 p-1 w-10" rowSpan={2}>परिमाण</th>
+                            <th className="border border-slate-900 p-1 w-14" rowSpan={2}>दर</th>
+                            <th className="border border-slate-900 p-1 w-16" rowSpan={2}>जम्मा मूल्य</th>
+                            <th className="border border-slate-900 p-1 w-16" rowSpan={2}>शुरु प्राप्त मिति</th>
+                            <th className="border border-slate-900 p-1 w-20" rowSpan={2}>भौतिक अवस्था</th>
                             <th className="border border-slate-900 p-1 no-print" rowSpan={2}></th>
                         </tr>
                         <tr className="bg-slate-50 font-bold">
-                            <th className="border border-slate-900 p-1 w-16">सङ्केत नं.</th>
+                            <th className="border border-slate-900 p-1 w-14">सङ्केत नं.</th>
                             <th className="border border-slate-900 p-1">नाम</th>
                             <th className="border border-slate-900 p-1">स्पेसिफिकेशन</th>
-                            <th className="border border-slate-900 p-1 w-16">मोडेल</th>
-                            <th className="border border-slate-900 p-1 w-16">पहिचान नं.</th>
-                        </tr>
-                        <tr className="bg-slate-100 text-[8px]">
-                            {Array.from({length: 12}).map((_, i) => <th key={i} className="border border-slate-900 p-0.5">{i+1}</th>)}
-                            <th className="border border-slate-900 no-print"></th>
+                            <th className="border border-slate-900 p-1 w-14">मोडेल</th>
+                            <th className="border border-slate-900 p-1 w-14">पहिचान नं.</th>
                         </tr>
                     </thead>
                     <tbody>
                         {items.map((item, idx) => (
                             <tr key={item.id}>
                                 <td className="border border-slate-900 p-1">{idx + 1}</td>
-                                <td className="border border-slate-900 p-1"><input value={item.codeNo} onChange={e => updateItem(item.id, 'codeNo', e.target.value)} disabled={isViewOnly} className="w-full bg-transparent text-center outline-none" /></td>
+                                <td className="border border-slate-900 p-1 font-mono">{item.codeNo}</td>
                                 <td className="border border-slate-900 p-0 text-left">
                                     {!isViewOnly ? (
-                                        <SearchableSelect options={itemOptions} value={item.name} onChange={v => updateItem(item.id, 'name', v)} onSelect={opt => handleItemSelect(item.id, opt)} className="!border-none !bg-transparent !p-1 !text-[10px]" />
+                                        <SearchableSelect options={itemOptions} value={item.name} onChange={v => updateItem(item.id, 'name', v)} onSelect={opt => handleItemSelect(item.id, opt)} className="!border-none !bg-transparent !p-1 !text-[9px]" />
                                     ) : <div className="px-1 font-bold">{item.name}</div>}
                                 </td>
-                                <td className="border border-slate-900 p-1"><input value={item.specification} onChange={e => updateItem(item.id, 'specification', e.target.value)} disabled={isViewOnly} className="w-full bg-transparent text-left outline-none" /></td>
-                                <td className="border border-slate-900 p-1"><input value={item.model} onChange={e => updateItem(item.id, 'model', e.target.value)} disabled={isViewOnly} className="w-full bg-transparent text-center outline-none" /></td>
-                                <td className="border border-slate-900 p-1"><input value={item.idNo} onChange={e => updateItem(item.id, 'idNo', e.target.value)} disabled={isViewOnly} className="w-full bg-transparent text-center outline-none" /></td>
-                                <td className="border border-slate-900 p-1"><input value={item.unit} onChange={e => updateItem(item.id, 'unit', e.target.value)} disabled={isViewOnly} className="w-full bg-transparent text-center outline-none" /></td>
-                                <td className="border border-slate-900 p-1 font-bold"><input type="number" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', e.target.value)} disabled={isViewOnly} className="w-full bg-transparent text-center outline-none" /></td>
-                                <td className="border border-slate-900 p-1"><input type="number" value={item.rate || ''} onChange={e => updateItem(item.id, 'rate', e.target.value)} disabled={isViewOnly} className="w-full bg-transparent text-right outline-none" /></td>
+                                <td className="border border-slate-900 p-1">{item.specification}</td>
+                                <td className="border border-slate-900 p-1">{item.model}</td>
+                                <td className="border border-slate-900 p-1">{item.idNo}</td>
+                                <td className="border border-slate-900 p-1">{item.unit}</td>
+                                <td className="border border-slate-900 p-1 font-bold">{item.quantity}</td>
+                                <td className="border border-slate-900 p-1 text-right">{item.rate ? item.rate.toFixed(2) : '-'}</td>
                                 <td className="border border-slate-900 p-1 text-right font-bold bg-slate-50">{item.totalAmount.toFixed(2)}</td>
-                                <td className="border border-slate-900 p-1"><input value={item.startDate} onChange={e => updateItem(item.id, 'startDate', e.target.value)} disabled={isViewOnly} className="w-full bg-transparent text-center outline-none" /></td>
-                                <td className="border border-slate-900 p-1">
-                                    <select value={item.condition} onChange={e => updateItem(item.id, 'condition', e.target.value)} disabled={isViewOnly} className="bg-transparent outline-none w-full">
-                                        <option value="चालू">चालू</option>
-                                        <option value="बिग्रेको">बिग्रेको</option>
-                                        <option value="लिलाम">लिलाम</option>
-                                    </select>
-                                </td>
+                                <td className="border border-slate-900 p-1">{item.startDate}</td>
+                                <td className="border border-slate-900 p-1">{item.condition}</td>
                                 <td className="border border-slate-900 p-1 no-print">
                                     {!isViewOnly && <button onClick={() => handleRemoveItem(item.id)} className="text-red-500 hover:text-red-700"><Trash2 size={12}/></button>}
                                 </td>
@@ -412,8 +437,7 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                         <tr className="bg-slate-50 font-bold">
                             <td colSpan={9} className="border border-slate-900 p-1 text-right px-4">जम्मा रकम</td>
                             <td className="border border-slate-900 p-1 text-right">{totalVal.toFixed(2)}</td>
-                            <td className="border border-slate-900 p-1"></td>
-                            <td className="border border-slate-900 p-1"></td>
+                            <td colSpan={2} className="border border-slate-900 p-1"></td>
                             <td className="border border-slate-900 p-1 no-print"></td>
                         </tr>
                     </tbody>
@@ -425,43 +449,43 @@ export const HafaFaram: React.FC<HafaFaramProps> = ({
                     </button>
                 )}
 
-                <div className="grid grid-cols-2 mt-12 gap-8 text-[11px]">
-                    <div className="border border-slate-400 p-4 relative">
-                        <p className="font-bold mb-4">सम्पत्ति तथा जिन्सी मालसामान हस्तान्तरण गर्ने कार्यालयले भर्ने:</p>
+                <div className="grid grid-cols-2 mt-8 gap-6 text-[9px]">
+                    <div className="border border-slate-400 p-3 relative rounded">
+                        <p className="font-bold mb-3">सम्पत्ति तथा जिन्सी मालसामान हस्तान्तरण गर्ने कार्यालयले भर्ने:</p>
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-4">
-                                <div className="border-t border-slate-900 mt-8 pt-1">तयार गर्ने:.......</div>
-                                <div className="flex gap-1"><span>नाम:</span><input value={formDetails.preparedBy.name} disabled className={inputClass + " flex-1"} /></div>
-                                <div className="flex gap-1"><span>पद:</span><input value={formDetails.preparedBy.designation} disabled className={inputClass + " flex-1"} /></div>
-                                <div className="flex gap-1"><span>मिति:</span><input value={formDetails.preparedBy.date} disabled className={inputClass + " flex-1"} /></div>
+                            <div className="space-y-2">
+                                <div className="border-t border-slate-900 mt-4 pt-1 font-bold">तयार गर्ने:</div>
+                                <div className="flex gap-1"><span>नाम:</span><input value={formDetails.preparedBy.name} disabled className={inputClass + " flex-1 text-[9px]"} /></div>
+                                <div className="flex gap-1"><span>पद:</span><input value={formDetails.preparedBy.designation} disabled className={inputClass + " flex-1 text-[9px]"} /></div>
+                                <div className="flex gap-1"><span>मिति:</span><input value={formDetails.preparedBy.date} disabled className={inputClass + " flex-1 text-[9px]"} /></div>
                             </div>
-                            <div className="space-y-4">
-                                <div className="border-t border-slate-900 mt-8 pt-1">स्वीकृत गर्ने:.......</div>
-                                <div className="flex gap-1"><span>नाम:</span><input value={formDetails.approvedBy.name} disabled className={inputClass + " flex-1"} /></div>
-                                <div className="flex gap-1"><span>पद:</span><input value={formDetails.approvedBy.designation} disabled className={inputClass + " flex-1"} /></div>
-                                <div className="flex gap-1"><span>मिति:</span><input value={formDetails.approvedBy.date} disabled className={inputClass + " flex-1"} /></div>
+                            <div className="space-y-2">
+                                <div className="border-t border-slate-900 mt-4 pt-1 font-bold">स्वीकृत गर्ने:</div>
+                                <div className="flex gap-1"><span>नाम:</span><input value={formDetails.approvedBy.name} disabled className={inputClass + " flex-1 text-[9px]"} /></div>
+                                <div className="flex gap-1"><span>पद:</span><input value={formDetails.approvedBy.designation} disabled className={inputClass + " flex-1 text-[9px]"} /></div>
+                                <div className="flex gap-1"><span>मिति:</span><input value={formDetails.approvedBy.date} disabled className={inputClass + " flex-1 text-[9px]"} /></div>
                             </div>
                         </div>
-                        <p className="mt-6 text-center">कार्यालयको छाप:-</p>
+                        <p className="mt-4 text-center font-bold">कार्यालयको छाप</p>
                     </div>
 
-                    <div className="border border-slate-400 p-4 relative">
-                        <p className="font-bold mb-4">सम्पत्ति तथा जिन्सी मालसामान बुझिलिने कार्यालयले भर्ने:</p>
+                    <div className="border border-slate-400 p-3 relative rounded">
+                        <p className="font-bold mb-3">सम्पत्ति तथा जिन्सी मालसामान बुझिलिने कार्यालयले भर्ने:</p>
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-4">
-                                <div className="border-t border-slate-900 mt-8 pt-1">तयार गर्ने:.......</div>
-                                <div className="flex gap-1"><span>नाम:</span><input className={inputClass + " flex-1"} disabled={isViewOnly}/></div>
-                                <div className="flex gap-1"><span>पद:</span><input className={inputClass + " flex-1"} disabled={isViewOnly}/></div>
-                                <div className="flex gap-1"><span>मिति:</span><input className={inputClass + " flex-1"} disabled={isViewOnly}/></div>
+                            <div className="space-y-2">
+                                <div className="border-t border-slate-900 mt-4 pt-1 font-bold">तयार गर्ने:</div>
+                                <div className="flex gap-1"><span>नाम:</span><input className={inputClass + " flex-1 text-[9px]"} disabled={isViewOnly}/></div>
+                                <div className="flex gap-1"><span>पद:</span><input className={inputClass + " flex-1 text-[9px]"} disabled={isViewOnly}/></div>
+                                <div className="flex gap-1"><span>मिति:</span><input className={inputClass + " flex-1 text-[9px]"} disabled={isViewOnly}/></div>
                             </div>
-                            <div className="space-y-4">
-                                <div className="border-t border-slate-900 mt-8 pt-1">स्वीकृत गर्ने:.......</div>
-                                <div className="flex gap-1"><span>नाम:</span><input className={inputClass + " flex-1"} disabled={isViewOnly}/></div>
-                                <div className="flex gap-1"><span>पद:</span><input className={inputClass + " flex-1"} disabled={isViewOnly}/></div>
-                                <div className="flex gap-1"><span>मिति:</span><input className={inputClass + " flex-1"} disabled={isViewOnly}/></div>
+                            <div className="space-y-2">
+                                <div className="border-t border-slate-900 mt-4 pt-1 font-bold">स्वीकृत गर्ने:</div>
+                                <div className="flex gap-1"><span>नाम:</span><input className={inputClass + " flex-1 text-[9px]"} disabled={isViewOnly}/></div>
+                                <div className="flex gap-1"><span>पद:</span><input className={inputClass + " flex-1 text-[9px]"} disabled={isViewOnly}/></div>
+                                <div className="flex gap-1"><span>मिति:</span><input className={inputClass + " flex-1 text-[9px]"} disabled={isViewOnly}/></div>
                             </div>
                         </div>
-                        <p className="mt-6 text-center">कार्यालयको छाप:-</p>
+                        <p className="mt-4 text-center font-bold">कार्यालयको छाप</p>
                     </div>
                 </div>
             </div>
