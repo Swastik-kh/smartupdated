@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Syringe, Activity, 
   ClipboardList, FileSpreadsheet, FilePlus, ShoppingCart, FileOutput, 
   BookOpen, Book, Archive, RotateCcw, Wrench, Scroll, BarChart3,
-  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User, Printer
+  Sliders, Store, ShieldCheck, Users, Database, KeyRound, UserCog, Lock, Warehouse, ClipboardCheck, Bell, X, CheckCircle2, ArrowRightCircle, AlertTriangle, Pill, Scissors, Clock, Calculator, Trash2, UsersRound, TrendingUp, Info, PieChart, CalendarCheck, User, Printer, SearchX
 } from 'lucide-react';
 import { APP_NAME, ORG_NAME, FISCAL_YEARS } from '../constants';
 import { DashboardProps, PurchaseOrderEntry, InventoryItem, RabiesPatient } from '../types'; 
@@ -188,11 +188,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, [rabiesPatients, inventoryItems, magForms, stockEntryRequests]);
 
   const pendingStockRequestsCount = stockEntryRequests.filter(r => r.status === 'Pending').length;
+  
   const magFaramBadgeCount = useMemo(() => {
       if (currentUser.role === 'STOREKEEPER') return magForms.filter(f => f.status === 'Pending').length;
       if (['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) return magForms.filter(f => f.status === 'Verified').length;
       return 0;
   }, [magForms, currentUser.role]);
+
+  // New Badge Count for Purchase Orders (Kharid Adesh)
+  const kharidAdeshBadgeCount = useMemo(() => {
+    if (currentUser.role === 'STOREKEEPER') return purchaseOrders.filter(o => o.status === 'Pending').length;
+    if (currentUser.role === 'ACCOUNT') return purchaseOrders.filter(o => o.status === 'Pending Account').length;
+    if (['ADMIN', 'SUPER_ADMIN', 'APPROVAL'].includes(currentUser.role)) return purchaseOrders.filter(o => o.status === 'Account Verified').length;
+    return 0;
+  }, [purchaseOrders, currentUser.role]);
 
   const menuItems = useMemo(() => {
     const isSuperOrAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
@@ -205,7 +214,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             { id: 'stock_entry_approval', label: 'स्टक प्रविष्टि', icon: <ClipboardCheck size={16} />, badgeCount: pendingStockRequestsCount }, 
             { id: 'jinshi_maujdat', label: 'जिन्सी मौज्दात', icon: <Warehouse size={16} /> }, 
             { id: 'mag_faram', label: 'माग फारम', icon: <FilePlus size={16} />, badgeCount: magFaramBadgeCount }, 
-            { id: 'kharid_adesh', label: 'खरिद आदेश', icon: <ShoppingCart size={16} /> }, 
+            { id: 'kharid_adesh', label: 'खरिद आदेश', icon: <ShoppingCart size={16} />, badgeCount: kharidAdeshBadgeCount }, 
             { id: 'nikasha_pratibedan', label: 'निकासा प्रतिवेदन', icon: <FileOutput size={16} /> },
             { id: 'jinshi_khata', label: 'जिन्सी खाता', icon: <Book size={16} /> },
             { id: 'dakhila_pratibedan', label: 'दाखिला प्रतिवेदन', icon: <Archive size={16} /> }
@@ -223,7 +232,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         if (isSuperOrAdmin) return true;
         return allowedMenus.includes(item.id) || (item.subItems && item.subItems.some(sub => allowedMenus.includes(sub.id)));
     });
-  }, [currentUser, pendingStockRequestsCount, magFaramBadgeCount]);
+  }, [currentUser, pendingStockRequestsCount, magFaramBadgeCount, kharidAdeshBadgeCount]);
 
   const handleMenuClick = (item: any) => {
     if (item.subItems) setExpandedMenu(expandedMenu === item.id ? null : item.id);
@@ -450,10 +459,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             </div>
 
                             {stats.expiringSoonItems.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-20 text-slate-400 no-print">
-                                    <CheckCircle2 size={64} className="opacity-20 mb-4 text-green-500" />
-                                    <p className="font-nepali text-xl font-bold">सबै ठिक छ!</p>
-                                    <p className="text-sm">अर्को ३ महिनाभित्र म्याद सकिने कुनै सामान छैन।</p>
+                                <div className="flex flex-col items-center justify-center py-24 text-slate-400 no-print">
+                                    <div className="bg-slate-50 p-6 rounded-full mb-4 ring-8 ring-slate-50/50">
+                                        <SearchX size={64} className="opacity-40 text-slate-400" />
+                                    </div>
+                                    <p className="font-nepali text-xl font-bold text-slate-600">रेकर्ड फेला परेन (Record not found)</p>
+                                    <p className="text-sm mt-2 font-medium">अर्को ३ महिनाभित्र म्याद सकिने कुनै सामान छैन।</p>
                                 </div>
                             ) : (
                                 <table className="w-full text-sm text-left border-collapse print:text-[10px]">
@@ -532,7 +543,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       case 'store_setup': return <StoreSetup currentFiscalYear={currentFiscalYear} stores={stores} onAddStore={onAddStore} onUpdateStore={onUpdateStore} onDeleteStore={onDeleteStore} inventoryItems={inventoryItems} onUpdateInventoryItem={onUpdateInventoryItem} />;
       case 'tb_leprosy': return <TBPatientRegistration currentFiscalYear={currentFiscalYear} currentUser={currentUser} patients={tbPatients} onAddPatient={onAddTBPatient} onUpdatePatient={onUpdateTBPatient} onDeletePatient={onDeleteTBPatient} />;
       case 'rabies': return <RabiesRegistration currentFiscalYear={currentFiscalYear} patients={rabiesPatients} onAddPatient={onAddRabiesPatient} onUpdatePatient={onUpdateRabiesPatient} onDeletePatient={onDeletePatient} currentUser={currentUser} />;
-      case 'mag_faram': return <MagFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} existingForms={magForms} onSave={onSaveMagForm} inventoryItems={inventoryItems} stores={stores} generalSettings={generalSettings} allUsers={users} />;
+      case 'mag_faram': return <MagFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} existingForms={magForms} onSave={onSaveMagForm} inventoryItems={inventoryItems} stores={stores} generalSettings={generalSettings} allUsers={users} issueReports={issueReports} />;
       case 'kharid_adesh': return <KharidAdesh orders={purchaseOrders} currentFiscalYear={currentFiscalYear} onSave={onUpdatePurchaseOrder} currentUser={currentUser} firms={firms} quotations={quotations} onDakhilaClick={handleDakhilaFromPo} generalSettings={generalSettings} />;
       case 'nikasha_pratibedan': return <NikashaPratibedan reports={issueReports} onSave={onUpdateIssueReport} currentUser={currentUser} currentFiscalYear={currentFiscalYear} generalSettings={generalSettings} />;
       case 'jinshi_maujdat': return <JinshiMaujdat currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} onAddInventoryItem={onAddInventoryItem} onUpdateInventoryItem={onUpdateInventoryItem} stores={stores} onRequestStockEntry={onRequestStockEntry} pendingPoDakhila={pendingPoDakhila} onClearPendingPoDakhila={() => setPendingPoDakhila(null)} />;

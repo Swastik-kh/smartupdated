@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Trash2, Printer, Save, Calendar, CheckCircle2, Send, Clock, FileText, Eye, Search, X, AlertCircle, ChevronRight, ArrowLeft, Check, Square, Warehouse, Layers, ShieldCheck, Building2 } from 'lucide-react';
-import { User, MagItem, MagFormEntry, InventoryItem, Option, Store, OrganizationSettings } from '../types';
+import { Plus, Trash2, Printer, Save, Calendar, CheckCircle2, Send, Clock, FileText, Eye, Search, X, AlertCircle, ChevronRight, ArrowLeft, Check, Square, Warehouse, Layers, ShieldCheck, Building2, Info, History } from 'lucide-react';
+import { User, MagItem, MagFormEntry, InventoryItem, Option, Store, OrganizationSettings, IssueReportEntry } from '../types';
 import { SearchableSelect } from './SearchableSelect';
 import { Select } from './Select';
 import { NepaliDatePicker } from './NepaliDatePicker';
@@ -22,9 +22,10 @@ interface MagFaramProps {
   stores?: Store[];
   generalSettings: OrganizationSettings;
   allUsers?: User[]; // Added to get all available orgs
+  issueReports: IssueReportEntry[]; // Added prop for intelligence
 }
 
-export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUser, existingForms, onSave, inventoryItems, generalSettings, stores = [], allUsers = [] }) => {
+export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUser, existingForms, onSave, inventoryItems, generalSettings, stores = [], allUsers = [], issueReports = [] }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isViewOnly, setIsViewOnly] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -243,6 +244,57 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
       setValidationError(null);
   };
 
+  const finalizeSave = (extraData?: { storeId: string, itemType: 'Expendable' | 'Non-Expendable' }) => {
+    let nextStatus = formDetails.status || 'Pending';
+    let nextIsViewed = true;
+
+    let updatedStoreKeeper = { ...formDetails.storeKeeper };
+    let updatedApprovedBy = { ...formDetails.approvedBy };
+
+    if (editingId && editingId !== 'new') {
+        if (isVerifying) {
+            nextStatus = 'Verified';
+            nextIsViewed = false;
+            updatedStoreKeeper.name = currentUser.fullName;
+        }
+        else if (isApproving) {
+            nextStatus = 'Approved';
+            nextIsViewed = false;
+            updatedApprovedBy = {
+                name: currentUser.fullName,
+                designation: currentUser.designation,
+                date: todayBS
+            };
+        }
+    }
+
+    const itemsToSave = items.map(({ isFromInventory, ...rest }) => rest);
+    
+    const newForm: MagFormEntry = {
+        ...formDetails,
+        id: editingId === 'new' || !editingId ? Date.now().toString() : editingId,
+        items: itemsToSave,
+        status: nextStatus,
+        isViewedByRequester: nextIsViewed,
+        storeKeeper: updatedStoreKeeper,
+        approvedBy: updatedApprovedBy,
+        rejectionReason: "",
+        isInstitutional: isInstitutionalMode,
+        sourceOrg: formDetails.sourceOrg || currentUser.organizationName
+    };
+
+    const finalStoreId = extraData?.storeId || formDetails.selectedStoreId || '';
+    const finalItemType = extraData?.itemType || formDetails.issueItemType || '';
+
+    if (finalStoreId) newForm.selectedStoreId = finalStoreId;
+    if (finalItemType) newForm.issueItemType = finalItemType as any;
+
+    onSave(newForm);
+    alert(isInstitutionalMode ? `माग फारम सुरक्षित भयो र ${newForm.targetOrg} को जिन्सी शाखामा पठाइयो।` : "माग फारम सुरक्षित भयो।");
+    setShowVerifyPopup(false);
+    handleReset();
+  };
+
   const handleSave = () => {
     setValidationError(null);
     if (!formDetails.date) { setValidationError("कृपया मिति भर्नुहोस्।"); return; }
@@ -303,57 +355,6 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
       handleReset();
   };
 
-  const finalizeSave = (extraData?: { storeId: string, itemType: 'Expendable' | 'Non-Expendable' }) => {
-    let nextStatus = formDetails.status || 'Pending';
-    let nextIsViewed = true;
-
-    let updatedStoreKeeper = { ...formDetails.storeKeeper };
-    let updatedApprovedBy = { ...formDetails.approvedBy };
-
-    if (editingId && editingId !== 'new') {
-        if (isVerifying) {
-            nextStatus = 'Verified';
-            nextIsViewed = false;
-            updatedStoreKeeper.name = currentUser.fullName;
-        }
-        else if (isApproving) {
-            nextStatus = 'Approved';
-            nextIsViewed = false;
-            updatedApprovedBy = {
-                name: currentUser.fullName,
-                designation: currentUser.designation,
-                date: todayBS
-            };
-        }
-    }
-
-    const itemsToSave = items.map(({ isFromInventory, ...rest }) => rest);
-    
-    const newForm: MagFormEntry = {
-        ...formDetails,
-        id: editingId === 'new' || !editingId ? Date.now().toString() : editingId,
-        items: itemsToSave,
-        status: nextStatus,
-        isViewedByRequester: nextIsViewed,
-        storeKeeper: updatedStoreKeeper,
-        approvedBy: updatedApprovedBy,
-        rejectionReason: "",
-        isInstitutional: isInstitutionalMode,
-        sourceOrg: formDetails.sourceOrg || currentUser.organizationName
-    };
-
-    const finalStoreId = extraData?.storeId || formDetails.selectedStoreId || '';
-    const finalItemType = extraData?.itemType || formDetails.issueItemType || '';
-
-    if (finalStoreId) newForm.selectedStoreId = finalStoreId;
-    if (finalItemType) newForm.issueItemType = finalItemType as any;
-
-    onSave(newForm);
-    alert(isInstitutionalMode ? `माग फारम सुरक्षित भयो र ${newForm.targetOrg} को जिन्सी शाखामा पठाइयो।` : "माग फारम सुरक्षित भयो।");
-    setShowVerifyPopup(false);
-    handleReset();
-  };
-
   const handleReset = () => {
     setEditingId(null);
     setIsViewOnly(false);
@@ -379,6 +380,46 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
         targetOrg: '',
         sourceOrg: currentUser.organizationName
     });
+  };
+
+  // Helper function to find last issue info for an item
+  const findLastIssueInfo = (itemName: string) => {
+    if (!itemName) return null;
+    const confirmedIssues = issueReports.filter(r => r.status === 'Issued');
+    
+    // Flatten all items from all issued reports
+    const allIssuedItems = confirmedIssues.flatMap(report => 
+      report.items.map(item => ({
+        ...item,
+        issueDate: report.issueDate || report.requestDate,
+        issuedTo: report.demandBy?.name || 'N/A'
+      }))
+    );
+
+    // Filter by item name and sort by date descending
+    const itemHistory = allIssuedItems
+      .filter(i => i.name.trim().toLowerCase() === itemName.trim().toLowerCase())
+      .sort((a, b) => b.issueDate.localeCompare(a.issueDate));
+
+    if (itemHistory.length === 0) return null;
+
+    const last = itemHistory[0];
+    
+    // Calculate days ago
+    try {
+        const todayAd = new Date();
+        // Simple approximation for Nepali string comparison logic if AD dates aren't directly available, 
+        // but let's assume we can parse or compare strings for now.
+        // For accurate 'days ago', we ideally need the AD timestamp.
+        return {
+            date: last.issueDate,
+            person: last.issuedTo,
+            quantity: last.quantity,
+            unit: last.unit
+        };
+    } catch (e) {
+        return null;
+    }
   };
 
   const inputReadOnlyClass = "border-b border-dotted border-slate-800 flex-1 outline-none bg-slate-50 text-slate-500 cursor-not-allowed px-1 rounded-sm";
@@ -533,6 +574,12 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                       <h2 className="text-base font-bold">{generalSettings.subTitleNepali}</h2>
                       {generalSettings.subTitleNepali2 && <h3 className="text-sm font-bold">{generalSettings.subTitleNepali2}</h3>}
                       {generalSettings.subTitleNepali3 && <h3 className="text-base font-bold">{generalSettings.subTitleNepali3}</h3>}
+                      <div className="text-[10px] mt-2 space-x-1 font-medium text-slate-600">
+                          <span>{generalSettings.address}</span>
+                          {generalSettings.phone && <span>| फोन: {generalSettings.phone}</span>}
+                          {generalSettings.email && <span>| ईमेल: {generalSettings.email}</span>}
+                          {generalSettings.panNo && <span>| पान नं: {generalSettings.panNo}</span>}
+                      </div>
                   </div>
                   <div className="w-24"></div> 
               </div>
@@ -618,10 +665,12 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                   </tr>
               </thead>
               <tbody>
-                  {items.map((item, idx) => (
+                  {items.map((item, idx) => {
+                      const lastIssue = item.name ? findLastIssueInfo(item.name) : null;
+                      return (
                       <tr key={item.id} className="min-h-[30px]">
                           <td className="border border-slate-800 p-1">{idx + 1}</td>
-                          <td className="border border-slate-800 p-0 text-left">
+                          <td className="border border-slate-800 p-0 text-left relative group">
                               {!isViewOnly && isNewForm ? (
                                 <SearchableSelect 
                                     options={itemOptions} value={item.name} 
@@ -629,7 +678,44 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                                     onSelect={opt => handleItemSelect(item.id, opt)} 
                                     className="!border-none !bg-transparent !p-1 !text-xs" placeholder="सामान छान्नुहोस्..."
                                 />
-                              ) : <span className="px-2 font-medium">{item.name}</span>}
+                              ) : (
+                                <>
+                                    <div className="px-2 font-medium cursor-help flex items-center gap-1">
+                                        {item.name}
+                                        {lastIssue && <History size={10} className="text-slate-400 no-print" />}
+                                    </div>
+                                    
+                                    {/* LAST ISSUE INTEL TOOLTIP */}
+                                    {lastIssue && (
+                                        <div className="absolute z-[100] invisible group-hover:visible bg-slate-900 text-white p-4 rounded-xl shadow-2xl text-[10px] w-56 -top-2 left-full ml-3 pointer-events-none animate-in fade-in slide-in-from-left-2 duration-200 border border-slate-700 no-print">
+                                            <div className="flex items-center gap-2 border-b border-slate-700 pb-2 mb-2">
+                                                <div className="p-1 bg-indigo-500 rounded-md"><History size={14} className="text-white" /></div>
+                                                <span className="font-bold uppercase tracking-wider text-indigo-300">निकासा इतिहास (Last Issue)</span>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <div>
+                                                    <p className="text-slate-400 font-bold uppercase text-[8px]">निकासा मिति:</p>
+                                                    <p className="font-bold text-xs text-white">{lastIssue.date}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-slate-400 font-bold uppercase text-[8px]">बुझ्ने व्यक्ति:</p>
+                                                    <p className="font-bold text-xs text-white">{lastIssue.person}</p>
+                                                </div>
+                                                <div className="flex justify-between items-end">
+                                                    <div>
+                                                        <p className="text-slate-400 font-bold uppercase text-[8px]">परिमाण:</p>
+                                                        <p className="font-black text-sm text-green-400">{lastIssue.quantity} <span className="text-[10px] font-normal">{lastIssue.unit}</span></p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="mt-3 pt-2 border-t border-slate-800">
+                                                <p className="text-[8px] text-slate-500 italic">* यो विवरण पछिल्लो पटक जारी गरिएको प्रतिवेदनबाट लिइएको हो।</p>
+                                            </div>
+                                            <div className="absolute top-4 -left-1.5 w-3 h-3 bg-slate-900 border-l border-b border-slate-700 rotate-45"></div>
+                                        </div>
+                                    )}
+                                </>
+                              )}
                           </td>
                           <td className="border border-slate-800 p-1">
                               <input 
@@ -661,7 +747,7 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
                               )}
                           </td>
                       </tr>
-                  ))}
+                  )})}
               </tbody>
           </table>
 
