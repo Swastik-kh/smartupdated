@@ -25,6 +25,7 @@ const PERMISSION_STRUCTURE = [
             { id: 'mag_faram', label: 'माग फारम (Demand Form)' },
             { id: 'kharid_adesh', label: 'खरिद आदेश (Purchase Order)' },
             { id: 'nikasha_pratibedan', label: 'निकासा प्रतिवेदन (Issue Report)' },
+            { id: 'hafa_faram', label: 'हा.फा. फारम (Transfer Form)' },
             { id: 'sahayak_jinshi_khata', label: 'सहायक जिन्सी खाता (Sub. Ledger)' },
             { id: 'jinshi_khata', label: 'जिन्सी खाता (Inventory Ledger)' },
             { id: 'dakhila_pratibedan', label: 'दाखिला प्रतिवेदन (Entry Report)' },

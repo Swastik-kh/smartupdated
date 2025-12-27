@@ -83,7 +83,7 @@ export interface RabiesPatient {
   exposureDateBs: string; 
   regimen: 'Intradermal' | 'Intramuscular';
   schedule: VaccinationDose[];
-  orgName?: string; // Added to track which organization this record belongs to
+  orgName?: string;
 }
 
 export interface TBReport {
@@ -125,6 +125,22 @@ export interface MagItem {
   totalAmount?: number;
 }
 
+export interface HafaItem {
+  id: number;
+  codeNo: string;
+  name: string;
+  specification: string;
+  model: string;
+  idNo: string;
+  unit: string;
+  quantity: number;
+  rate: number;
+  totalAmount: number;
+  startDate: string;
+  condition: string;
+  remarks: string;
+}
+
 export interface Signature {
   name: string;
   designation?: string;
@@ -157,6 +173,23 @@ export interface MagFormEntry {
   isInstitutional?: boolean;
   targetOrg?: string;
   sourceOrg?: string;
+}
+
+export interface HafaEntry {
+  id: string;
+  fiscalYear: string;
+  formNo: string;
+  date: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  decisionNo: string;
+  decisionDate: string;
+  recipientOrg: string;
+  itemType: 'Expendable' | 'Non-Expendable';
+  items: HafaItem[];
+  preparedBy: Signature;
+  approvedBy: Signature;
+  recipientPreparedBy?: Signature;
+  recipientApprovedBy?: Signature;
 }
 
 export interface PurchaseOrderEntry {
@@ -196,7 +229,7 @@ export interface IssueReportEntry {
   status: 'Pending' | 'Pending Approval' | 'Issued' | 'Rejected'; 
   fiscalYear?: string; 
   itemType?: 'Expendable' | 'Non-Expendable'; 
-  storeId?: string; // Which store to deduct from
+  storeId?: string; 
   demandBy?: Signature; 
   preparedBy?: Signature;      
   recommendedBy?: Signature;   
@@ -264,6 +297,7 @@ export interface InventoryItem {
   storeId: string; 
   approvedStockLevel?: number; 
   emergencyOrderPoint?: number; 
+  orgName?: string;
 }
 
 export interface StockEntryRequest {
@@ -442,6 +476,9 @@ export interface DashboardProps {
   magForms: MagFormEntry[];
   onSaveMagForm: (form: MagFormEntry) => void;
   
+  hafaEntries: HafaEntry[];
+  onSaveHafaEntry: (entry: HafaEntry) => void;
+
   purchaseOrders: PurchaseOrderEntry[];
   onUpdatePurchaseOrder: (order: PurchaseOrderEntry) => void; 
 
