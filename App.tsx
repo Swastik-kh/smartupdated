@@ -44,15 +44,13 @@ const STORAGE_KEY_FY = 'smart_inventory_active_fy';
 
 const App: React.FC = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]); 
-  
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_USER);
     return saved ? JSON.parse(saved) : null;
   });
   
   const [currentFiscalYear, setCurrentFiscalYear] = useState<string>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_FY);
-    return saved || '2081/082';
+    return localStorage.getItem(STORAGE_KEY_FY) || '2081/082';
   });
 
   const [appDefaultFiscalYear, setAppDefaultFiscalYear] = useState<string>('2081/082');
@@ -80,22 +78,16 @@ const App: React.FC = () => {
     const connectedRef = ref(db, ".info/connected");
     onValue(connectedRef, (snap) => setIsDbConnected(snap.val() === true));
 
-    const globalConfigRef = ref(db, 'appConfig/defaultFiscalYear');
-    onValue(globalConfigRef, (snap) => {
-        if (snap.exists()) {
-            setAppDefaultFiscalYear(snap.val());
-        }
+    onValue(ref(db, 'appConfig/defaultFiscalYear'), (snap) => {
+        if (snap.exists()) setAppDefaultFiscalYear(snap.val());
     });
 
     const adminRef = ref(db, 'users/superadmin');
     get(adminRef).then((snapshot) => {
-        if (!snapshot.exists()) {
-            set(adminRef, DEFAULT_ADMIN);
-        }
+        if (!snapshot.exists()) set(adminRef, DEFAULT_ADMIN);
     });
 
-    const usersRef = ref(db, 'users');
-    const unsub = onValue(usersRef, (snap) => {
+    const unsub = onValue(ref(db, 'users'), (snap) => {
         const data = snap.val();
         const userList = data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : [];
         setAllUsers(userList.length > 0 ? userList : [DEFAULT_ADMIN]);
@@ -106,7 +98,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!currentUser) return;
-
     const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
     const orgPath = `orgData/${safeOrgName}`;
     const unsubscribes: Unsubscribe[] = [];
@@ -143,44 +134,7 @@ const App: React.FC = () => {
     setupOrgListener('marmatEntries', setMarmatEntries);
     setupOrgListener('disposalEntries', setDhuliyaunaEntries);
     setupOrgListener('logBook', setLogBookEntries);
-
-    if (currentUser.role === 'SUPER_ADMIN') {
-        const allOrgRef = ref(db, 'orgData');
-        const unsub = onValue(allOrgRef, (snap) => {
-            const allData = snap.val() || {};
-            const combinedRabies: RabiesPatient[] = [];
-            const combinedInventory: InventoryItem[] = [];
-            const combinedStores: Store[] = [];
-
-            Object.keys(allData).forEach(orgKey => {
-                const orgNameClean = orgKey.replace(/_/g, ' ');
-                const orgRabies = allData[orgKey].rabiesPatients;
-                if (orgRabies) {
-                    Object.keys(orgRabies).forEach(pKey => {
-                        combinedRabies.push({ ...orgRabies[pKey], id: pKey, orgName: orgNameClean });
-                    });
-                }
-                const orgInv = allData[orgKey].inventory;
-                if (orgInv) {
-                    Object.keys(orgInv).forEach(iKey => {
-                        combinedInventory.push({ ...orgInv[iKey], id: iKey, orgName: orgNameClean });
-                    });
-                }
-                const orgStores = allData[orgKey].stores;
-                if (orgStores) {
-                    Object.keys(orgStores).forEach(sKey => {
-                        combinedStores.push({ ...orgStores[sKey], id: sKey });
-                    });
-                }
-            });
-            setRabiesPatients(combinedRabies);
-            setInventoryItems(combinedInventory);
-            setStores(combinedStores);
-        });
-        unsubscribes.push(unsub);
-    } else {
-        setupOrgListener('rabiesPatients', setRabiesPatients);
-    }
+    setupOrgListener('rabiesPatients', setRabiesPatients);
 
     return () => unsubscribes.forEach(unsub => unsub());
   }, [currentUser]);
@@ -203,101 +157,70 @@ const App: React.FC = () => {
       return ref(db, `orgData/${safeOrgName}/${subPath}`);
   };
 
-  const handleUpdateGeneralSettings = (s: OrganizationSettings) => {
-      if (!currentUser) return;
-      set(getOrgRef('settings'), s);
-      if (currentUser.role === 'SUPER_ADMIN') {
-          set(ref(db, 'appConfig/defaultFiscalYear'), s.activeFiscalYear);
-      }
-  };
-
   return (
     <>
       {currentUser ? (
         <Dashboard 
-          onLogout={handleLogout} 
-          currentUser={currentUser}
-          currentFiscalYear={currentFiscalYear} 
-          users={allUsers}
-          onAddUser={(u) => set(ref(db, `users/${u.id}`), u)}
+          onLogout={handleLogout} currentUser={currentUser} currentFiscalYear={currentFiscalYear} 
+          users={allUsers} onAddUser={(u) => set(ref(db, `users/${u.id}`), u)}
           onUpdateUser={(u) => set(ref(db, `users/${u.id}`), u)}
           onDeleteUser={(id) => remove(ref(db, `users/${id}`))}
           onChangePassword={(id, pass) => update(ref(db, `users/${id}`), { password: pass })}
-          generalSettings={generalSettings}
-          onUpdateGeneralSettings={handleUpdateGeneralSettings}
-          magForms={magForms}
-          onSaveMagForm={(f) => set(getOrgRef(`magForms/${f.id}`), f)}
-          hafaEntries={hafaEntries}
-          onSaveHafaEntry={(e) => set(getOrgRef(`hafaEntries/${e.id}`), e)}
+          generalSettings={generalSettings} onUpdateGeneralSettings={(s) => set(getOrgRef('settings'), s)}
+          magForms={magForms} onSaveMagForm={(f) => set(getOrgRef(`magForms/${f.id}`), f)}
+          hafaEntries={hafaEntries} onSaveHafaEntry={(e) => set(getOrgRef(`hafaEntries/${e.id}`), e)}
           onDeleteHafaEntry={(id) => remove(getOrgRef(`hafaEntries/${id}`))}
-          purchaseOrders={purchaseOrders}
-          onUpdatePurchaseOrder={(o) => set(getOrgRef(`purchaseOrders/${o.id}`), o)}
-          issueReports={issueReports}
-          onUpdateIssueReport={(r) => set(getOrgRef(`issueReports/${r.id}`), r)}
-          rabiesPatients={rabiesPatients}
-          onAddRabiesPatient={async (p) => { await set(getOrgRef(`rabiesPatients/${p.id}`), p); }}
-          onUpdateRabiesPatient={async (p) => { await set(getOrgRef(`rabiesPatients/${p.id}`), p); }}
+          purchaseOrders={purchaseOrders} onUpdatePurchaseOrder={(o) => set(getOrgRef(`purchaseOrders/${o.id}`), o)}
+          issueReports={issueReports} onUpdateIssueReport={(r) => set(getOrgRef(`issueReports/${r.id}`), r)}
+          rabiesPatients={rabiesPatients} onAddRabiesPatient={(p) => set(getOrgRef(`rabiesPatients/${p.id}`), p)}
+          onUpdateRabiesPatient={(p) => set(getOrgRef(`rabiesPatients/${p.id}`), p)}
           onDeletePatient={(id) => remove(getOrgRef(`rabiesPatients/${id}`))}
-          tbPatients={tbPatients}
-          onAddTBPatient={async (p) => { await set(getOrgRef(`tbPatients/${p.id}`), p); }}
-          onUpdateTBPatient={async (p) => { await set(getOrgRef(`tbPatients/${p.id}`), p); }}
+          tbPatients={tbPatients} onAddTBPatient={(p) => set(getOrgRef(`tbPatients/${p.id}`), p)}
+          onUpdateTBPatient={(p) => set(getOrgRef(`tbPatients/${p.id}`), p)}
           onDeleteTBPatient={(id) => remove(getOrgRef(`tbPatients/${id}`))}
-          firms={firms}
-          onAddFirm={(f) => set(getOrgRef(`firms/${f.id}`), f)}
-          quotations={quotations}
-          onAddQuotation={(q) => set(getOrgRef(`quotations/${q.id}`), q)}
-          inventoryItems={inventoryItems}
-          onAddInventoryItem={(i) => set(getOrgRef(`inventory/${i.id}`), i)}
+          firms={firms} onAddFirm={(f) => set(getOrgRef(`firms/${f.id}`), f)}
+          quotations={quotations} onAddQuotation={(q) => set(getOrgRef(`quotations/${q.id}`), q)}
+          inventoryItems={inventoryItems} onAddInventoryItem={(i) => set(getOrgRef(`inventory/${i.id}`), i)}
           onUpdateInventoryItem={(i) => set(getOrgRef(`inventory/${i.id}`), i)}
-          stockEntryRequests={stockEntryRequests}
-          onRequestStockEntry={(r) => set(getOrgRef(`stockRequests/${r.id}`), r)}
-          onApproveStockEntry={() => {}} 
-          onRejectStockEntry={() => {}}
-          stores={stores}
-          onAddStore={(s) => set(getOrgRef(`stores/${s.id}`), s)}
+          stockEntryRequests={stockEntryRequests} onRequestStockEntry={(r) => set(getOrgRef(`stockRequests/${r.id}`), r)}
+          onApproveStockEntry={() => {}} onRejectStockEntry={() => {}}
+          stores={stores} onAddStore={(s) => set(getOrgRef(`stores/${s.id}`), s)}
           onUpdateStore={(s) => set(getOrgRef(`stores/${s.id}`), s)}
           onDeleteStore={(id) => remove(getOrgRef(`stores/${id}`))}
-          dakhilaReports={dakhilaReports}
-          onSaveDakhilaReport={(r) => set(getOrgRef(`dakhilaReports/${r.id}`), r)}
-          returnEntries={returnEntries}
-          onSaveReturnEntry={(e) => set(getOrgRef(`returnEntries/${e.id}`), e)}
-          marmatEntries={marmatEntries}
-          onSaveMarmatEntry={(e) => set(getOrgRef(`marmatEntries/${e.id}`), e)}
-          dhuliyaunaEntries={dhuliyaunaEntries}
-          onSaveDhuliyaunaEntry={(e) => set(getOrgRef(`disposalEntries/${e.id}`), e)}
-          logBookEntries={logBookEntries}
-          onSaveLogBookEntry={(e) => set(getOrgRef(`logBook/${e.id}`), e)}
+          dakhilaReports={dakhilaReports} onSaveDakhilaReport={(r) => set(getOrgRef(`dakhilaReports/${r.id}`), r)}
+          returnEntries={returnEntries} onSaveReturnEntry={(e) => set(getOrgRef(`returnEntries/${e.id}`), e)}
+          marmatEntries={marmatEntries} onSaveMarmatEntry={(e) => set(getOrgRef(`marmatEntries/${e.id}`), e)}
+          dhuliyaunaEntries={dhuliyaunaEntries} onSaveDhuliyaunaEntry={(e) => set(getOrgRef(`disposalEntries/${e.id}`), e)}
+          logBookEntries={logBookEntries} onSaveLogBookEntry={(e) => set(getOrgRef(`logBook/${e.id}`), e)}
           onClearData={(p) => remove(getOrgRef(p))}
         />
       ) : (
         <div className="min-h-screen w-full bg-slate-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-[420px] animate-in fade-in zoom-in-95 duration-500">
-            <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+          <div className="w-full max-w-[440px] animate-in fade-in zoom-in-95 duration-500">
+            <div className="bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] overflow-hidden border border-slate-200">
               <div className="bg-primary-600 p-10 text-center text-white relative">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-                <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-5 shadow-2xl border-4 border-primary-500/30 group hover:scale-105 transition-transform duration-300">
+                <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-5 shadow-2xl border-4 border-primary-500/30">
                     <Boxes size={48} className="text-primary-600" />
                 </div>
-                <h1 className="text-3xl font-bold font-nepali tracking-tight drop-shadow-sm">{APP_NAME}</h1>
-                <p className="text-[13px] font-nepali text-primary-50 mt-1.5 opacity-90 font-medium">जिन्सी व्यवस्थापन अब तपाइँको हातमा</p>
+                <h1 className="text-3xl font-bold font-nepali tracking-tight">{APP_NAME}</h1>
+                <p className="text-[13px] font-nepali text-primary-50 mt-1.5 opacity-90">जिन्सी व्यवस्थापन अब तपाइँको हातमा</p>
                 <p className="text-primary-200 text-[10px] mt-3 uppercase font-bold tracking-[0.2em] opacity-60">Secure Login Portal</p>
               </div>
-              <div className="p-8 bg-white">
+              <div className="p-8 md:p-10 bg-white">
                 <LoginForm 
                     users={allUsers} 
                     onLoginSuccess={handleLoginSuccess} 
                     initialFiscalYear={appDefaultFiscalYear} 
                 />
               </div>
-              <div className="bg-slate-50 p-5 text-center border-t border-slate-100">
-                 <div className="flex items-center justify-center gap-2 text-slate-400">
+              <div className="bg-slate-50 p-5 text-center border-t border-slate-100 flex items-center justify-center gap-2 text-slate-400">
                     <ShieldCheck size={14} className="text-primary-500" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Protected Database | v2.0</span>
-                 </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Protected Cloud | v2.0</span>
               </div>
             </div>
             <p className="text-center mt-8 text-slate-400 text-[10px] font-bold uppercase tracking-[0.25em]">
-                &copy; {new Date().getFullYear()} {APP_NAME.toUpperCase()} CLOUD
+                &copy; {new Date().getFullYear()} {APP_NAME.toUpperCase()} SOFTWARE
             </p>
           </div>
         </div>
