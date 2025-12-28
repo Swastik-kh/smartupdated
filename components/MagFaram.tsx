@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Trash2, Printer, Save, Calendar, CheckCircle2, Send, Clock, FileText, Eye, Search, X, AlertCircle, ChevronRight, ArrowLeft, Check, Square, Warehouse, Layers, ShieldCheck, Building2, Info, History, Loader2 } from 'lucide-react';
-import { User, MagItem, MagFormEntry, InventoryItem, Option, Store, OrganizationSettings, IssueReportEntry } from '../types';
+import { Plus, Trash2, Printer, Save, ArrowLeft, Send, CheckCircle2, Clock, FileText, Eye, Search, X, AlertCircle, Building2, Loader2, Square } from 'lucide-react';
+import { User, MagItem, MagFormEntry, InventoryItem, Option, Store, OrganizationSettings, IssueReportEntry, PurchaseOrderEntry } from '../types';
 import { SearchableSelect } from './SearchableSelect';
 import { Select } from './Select';
 import { NepaliDatePicker } from './NepaliDatePicker';
@@ -22,6 +22,9 @@ interface MagFaramProps {
   generalSettings: OrganizationSettings;
   allUsers?: User[];
   issueReports: IssueReportEntry[];
+  purchaseOrders: PurchaseOrderEntry[];
+  onSavePurchaseOrder: (order: PurchaseOrderEntry) => void;
+  onSaveIssueReport: (report: IssueReportEntry) => void;
 }
 
 const itemTypeOptions: Option[] = [
@@ -29,7 +32,20 @@ const itemTypeOptions: Option[] = [
   { id: 'nonExpendable', value: 'Non-Expendable', label: 'खर्च नहुने (Non-Expendable)' },
 ];
 
-export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUser, existingForms, onSave, inventoryItems, generalSettings, stores = [], allUsers = [], issueReports = [] }) => {
+export const MagFaram: React.FC<MagFaramProps> = ({ 
+    currentFiscalYear, 
+    currentUser, 
+    existingForms, 
+    onSave, 
+    inventoryItems, 
+    generalSettings, 
+    stores = [], 
+    allUsers = [], 
+    issueReports = [],
+    purchaseOrders = [],
+    onSavePurchaseOrder,
+    onSaveIssueReport
+}) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isViewOnly, setIsViewOnly] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -183,7 +199,47 @@ export const MagFaram: React.FC<MagFaramProps> = ({ currentFiscalYear, currentUs
 
     try {
         onSave(newForm);
-        alert(isInstitutionalMode ? `माग फारम सुरक्षित भयो र ${newForm.targetOrg} मा पठाइयो।` : "माग फारम सुरक्षित भयो।");
+        
+        // --- AUTO-BRIDGE LOGIC ---
+        // स्वीकृत भएपछि स्वतः अर्को चरणमा पठाउने
+        if (isApproving && nextStatus === 'Approved' && !newForm.isInstitutional) {
+            if (newForm.storeKeeper?.status === 'market') {
+                // १. खरिद आदेश (PO) सिर्जना गर्ने
+                const alreadyHasPO = purchaseOrders.some(po => po.magFormId === newForm.id);
+                if (!alreadyHasPO) {
+                    const newPO: PurchaseOrderEntry = {
+                        id: `PO-${newForm.id}`,
+                        magFormId: newForm.id,
+                        magFormNo: newForm.formNo,
+                        requestDate: newForm.date,
+                        items: newForm.items,
+                        status: 'Pending',
+                        fiscalYear: newForm.fiscalYear
+                    };
+                    onSavePurchaseOrder(newPO);
+                }
+            } else if (newForm.storeKeeper?.status === 'stock') {
+                // २. निकासा प्रतिवेदन (Issue Report) सिर्जना गर्ने
+                const alreadyHasIR = issueReports.some(ir => ir.magFormId === newForm.id);
+                if (!alreadyHasIR) {
+                    const newIR: IssueReportEntry = {
+                        id: `IR-${newForm.id}`,
+                        magFormId: newForm.id,
+                        magFormNo: newForm.formNo,
+                        requestDate: newForm.date,
+                        items: newForm.items,
+                        status: 'Pending',
+                        fiscalYear: newForm.fiscalYear,
+                        itemType: newForm.issueItemType,
+                        storeId: newForm.selectedStoreId,
+                        demandBy: newForm.demandBy
+                    };
+                    onSaveIssueReport(newIR);
+                }
+            }
+        }
+
+        alert(isInstitutionalMode ? `माग फारम सुरक्षित भयो र ${newForm.targetOrg} मा पठाइयो।` : (isApproving ? "माग फारम स्वीकृत भयो र स्टोरमा पठाइयो।" : "माग फारम सुरक्षित भयो।"));
         setShowVerifyPopup(false);
         handleReset();
     } catch (e) {
