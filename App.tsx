@@ -227,6 +227,15 @@ const App: React.FC = () => {
     localStorage.removeItem(STORAGE_KEY_FY);
   };
 
+  const onAddInventoryItem = (item: InventoryItem) => {
+    const targetOrgName = currentUser?.role === 'SUPER_ADMIN' && item.orgName
+        ? item.orgName // If Super Admin and item has an orgName, use it
+        : currentUser?.organizationName || "unknown"; // Otherwise use current user's org
+    
+    const safeTargetOrgName = targetOrgName.trim().replace(/[.#$[\]]/g, "_");
+    set(ref(db, `orgData/${safeTargetOrgName}/inventory/${item.id}`), item);
+  };
+
   const getOrgRef = (subPath: string) => {
       const safeOrgName = currentUser?.organizationName.trim().replace(/[.#$[\]]/g, "_") || "unknown";
       return ref(db, `orgData/${safeOrgName}/${subPath}`);
@@ -259,7 +268,7 @@ const App: React.FC = () => {
           onDeleteTBPatient={(id) => remove(getOrgRef(`tbPatients/${id}`))}
           firms={firms} onAddFirm={(f) => set(getOrgRef(`firms/${f.id}`), f)}
           quotations={quotations} onAddQuotation={(q) => set(getOrgRef(`quotations/${q.id}`), q)}
-          inventoryItems={inventoryItems} onAddInventoryItem={(i) => set(getOrgRef(`inventory/${i.id}`), i)}
+          inventoryItems={inventoryItems} onAddInventoryItem={onAddInventoryItem}
           onUpdateInventoryItem={(i) => set(getOrgRef(`inventory/${i.id}`), i)}
           stockEntryRequests={stockEntryRequests} onRequestStockEntry={(r) => set(getOrgRef(`stockRequests/${r.id}`), r)}
           onApproveStockEntry={() => {}} onRejectStockEntry={() => {}}

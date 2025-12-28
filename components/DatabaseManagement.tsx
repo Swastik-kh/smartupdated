@@ -3,6 +3,8 @@ import React, { useState, useMemo } from 'react';
 import { Database, Download, Upload, FileJson, FileSpreadsheet, ShieldCheck, HardDrive, FileText, Users, ShoppingCart, Archive, Syringe, FileUp, AlertCircle, CheckCircle2, FolderUp, Info, Trash2, AlertTriangle, Lock, Store as StoreIcon, Table as TableIcon, Loader2, Sparkles, OctagonAlert } from 'lucide-react';
 import { User, InventoryItem, MagFormEntry, PurchaseOrderEntry, IssueReportEntry, RabiesPatient, FirmEntry, Store, Option } from '../types';
 import { Select } from './Select';
+// @ts-ignore
+import NepaliDate from 'nepali-date-converter';
 
 interface DatabaseManagementProps {
   currentUser: User;
@@ -15,6 +17,7 @@ interface DatabaseManagementProps {
   firms: FirmEntry[];
   stores: Store[];
   onClearData?: (sectionId: string) => void;
+  onAddInventoryItem: (item: InventoryItem) => void; // Added for inventory upload
 }
 
 interface ColumnSpec {
@@ -33,7 +36,8 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
   rabiesPatients,
   firms,
   stores,
-  onClearData
+  onClearData,
+  onAddInventoryItem
 }) => {
   const [activeTab, setActiveTab] = useState<'download' | 'upload' | 'delete'>('download');
   const [uploadTarget, setUploadTarget] = useState('');
@@ -41,6 +45,8 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
 
   const dataSections = useMemo(() => [
     { id: 'users', title: 'प्रयोगकर्ताहरू (Users)', data: users, icon: <Users size={24} className="text-blue-600" />, desc: 'प्रणाली प्रयोगकर्ता र लगइन विवरण', color: 'bg-blue-50 border-blue-200' },
@@ -92,7 +98,10 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
       { header: "specification", example: "Antipyretic", desc: "सामानको विवरण/बिशेषता" },
       { header: "batchNo", example: "BTCH-45", desc: "ब्याच नम्बर" },
       { header: "expiryDateAd", example: "2026-12-31", desc: "म्याद सकिने मिति (AD)" },
-      { header: "remarks", example: "Urgent Stock", desc: "कैफियत" }
+      { header: "remarks", example: "Urgent Stock", desc: "कैफियत" },
+      { header: "receiptSource", example: "Purchase", desc: "प्राप्तिको स्रोत" },
+      { header: "lastUpdateDateBs", example: "2081-05-15", desc: "अन्तिम अपडेट मिति (BS)" },
+      { header: "fiscalYear", example: "2081/082", desc: "आर्थिक वर्ष" }
     ],
     rabies: [
       { header: "regNo", example: "R-81-001" },
@@ -167,26 +176,119 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
       setUploadSuccess(null);
+      setUploadError(null);
     }
   };
 
-  const handleUpload = () => {
-    if (!uploadTarget || !selectedFile) return;
-    if (uploadTarget === 'inventory' && !selectedStoreForUpload) {
-      alert("कृपया मौज्दात अपलोडको लागि स्टोर छान्नुहोस्।");
-      return;
+  const parseCSV = (text: string): Record<string, string>[] => {
+    const lines = text.split('\n').filter(line => line.trim() !== '');
+    if (lines.length === 0) return [];
+
+    const headers = lines[0].split(',').map(h => h.trim());
+    const result: Record<string, string>[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim());
+        if (values.length !== headers.length) {
+            console.warn(`Skipping row ${i + 1} due to column mismatch.`);
+            continue;
+        }
+        const rowObject: Record<string, string> = {};
+        headers.forEach((header, index) => {
+            rowObject[header] = values[index];
+        });
+        result.push(rowObject);
     }
+    return result;
+  };
+
+  const handleUpload = async () => {
+    if (!uploadTarget || !selectedFile) {
+        setUploadError("कृपया अपलोड गर्न डाटाको प्रकार र फाइल छान्नुहोस्।");
+        return;
+    }
+    if (uploadTarget === 'inventory' && !selectedStoreForUpload) {
+        setUploadError("कृपया मौज्दात अपलोडको लागि लक्ष्य स्टोर छान्नुहोस्।");
+        return;
+    }
+
     setIsUploading(true);
-    setTimeout(() => {
-      setIsUploading(false);
-      setUploadSuccess(`फाइल सफलतापूर्वक अपलोड भयो!`);
-      setSelectedFile(null);
-      setSelectedStoreForUpload('');
-    }, 2000);
+    setUploadSuccess(null);
+    setUploadError(null);
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const text = e.target?.result as string;
+            const parsedData = parseCSV(text);
+
+            if (parsedData.length === 0) {
+                setUploadError("अपलोड गर्न कुनै डाटा फेला परेन।");
+                return;
+            }
+
+            if (uploadTarget === 'inventory') {
+                const targetStore = stores.find(s => s.id === selectedStoreForUpload);
+                if (!targetStore) {
+                    setUploadError("चयन गरिएको स्टोर फेला परेन।");
+                    return;
+                }
+                const targetOrgName = targetStore.orgName || currentUser.organizationName;
+                const uploadDateAd = new Date().toISOString().split('T')[0]; // Current AD Date for lastUpdate
+                // Fix: Access NepaliDate constructor and format its result
+                const uploadDateBs = new NepaliDate().format('YYYY-MM-DD'); // Current BS Date for lastUpdate
+
+                for (const row of parsedData) {
+                    const newInventoryItem: InventoryItem = {
+                        id: Date.now().toString() + Math.random().toString(36).substring(2, 8), // Unique ID
+                        // Fix: Access NepaliDate constructor for fiscalYear
+                        fiscalYear: row.fiscalYear || `${new NepaliDate().getYear()}/${(new NepaliDate().getYear() + 1).toString().slice(-2)}`,
+                        itemName: row.itemName || 'Unnamed Item',
+                        itemType: (row.itemType as 'Expendable' | 'Non-Expendable') || 'Expendable',
+                        itemClassification: row.itemClassification || '',
+                        unit: row.unit || 'units',
+                        currentQuantity: parseFloat(row.currentQuantity) || 0,
+                        rate: parseFloat(row.rate) || 0,
+                        tax: parseFloat(row.tax || '0') || 0,
+                        uniqueCode: row.uniqueCode || '',
+                        sanketNo: row.sanketNo || '',
+                        ledgerPageNo: row.ledgerPageNo || '',
+                        specification: row.specification || '',
+                        batchNo: row.batchNo || '',
+                        expiryDateAd: row.expiryDateAd || '',
+                        expiryDateBs: row.expiryDateBs || '',
+                        receiptSource: row.receiptSource || 'Bulk Upload',
+                        remarks: row.remarks || '',
+                        lastUpdateDateAd: uploadDateAd,
+                        lastUpdateDateBs: uploadDateBs,
+                        storeId: targetStore.id,
+                        orgName: targetOrgName,
+                    };
+                    // Calculate totalAmount after all other numerical fields are set
+                    newInventoryItem.totalAmount = (newInventoryItem.currentQuantity * newInventoryItem.rate) * (1 + (newInventoryItem.tax || 0) / 100);
+
+                    await onAddInventoryItem(newInventoryItem); // Use the prop to add item
+                }
+                setUploadSuccess(`इन्भेन्टरी डाटा सफलतापूर्वक ${targetStore.name} [${targetOrgName}] मा अपलोड भयो।`);
+            } else {
+                // For other data types, a generic save (not yet implemented in App.tsx)
+                setUploadError("अन्य डाटा प्रकारहरूको अपलोड हाल समर्थित छैन।");
+            }
+            setSelectedFile(null);
+            setSelectedStoreForUpload('');
+        } catch (error: any) {
+            setUploadError(`फाइल अपलोड गर्दा त्रुटि भयो: ${error.message || 'अज्ञात त्रुटि'}`);
+            console.error("Upload error:", error);
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    reader.readAsText(selectedFile);
   };
 
   const handleDelete = (sectionId: string, title: string) => {
-    if (window.confirm(`के तपाईं निश्चित हुनुहुन्छ कि तपाईं "${title}" को सम्पूर्ण डाटा मेटाउन चाहनुहुन्छ?`)) {
+    if (window.confirm(`के तपाईं निश्चित हुनुहुन्छ कि तपाईं "${title}" को सम्पूर्ण डाटा मेटाउन चाहनुहुन्छ? मेटिएको डाटा फिर्ता ल्याउन सकिँदैन।`)) {
       if (onClearData) onClearData(sectionId);
     }
   };
@@ -209,7 +311,7 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
           {activeTab === 'download' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-full"></div>}
         </button>
         <button onClick={() => setActiveTab('upload')} className={`pb-3 px-1 text-sm font-medium transition-all relative whitespace-nowrap ${activeTab === 'upload' ? 'text-green-600' : 'text-slate-500 hover:text-slate-700'}`}>
-          <div className="flex items-center gap-2"><Upload size={18} />डाटा अपलोड (Excel)</div>
+          <div className="flex items-center gap-2"><Upload size={18} />डाटा अपलोड (CSV)</div>
           {activeTab === 'upload' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-green-600 rounded-t-full"></div>}
         </button>
         <button onClick={() => setActiveTab('delete')} className={`pb-3 px-1 text-sm font-medium transition-all relative whitespace-nowrap ${activeTab === 'delete' ? 'text-red-600' : 'text-slate-500 hover:text-slate-700'}`}>
@@ -251,7 +353,7 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                 <Upload className="text-green-600 mt-1" size={20} />
                 <div>
                   <h4 className="font-bold text-green-800 font-nepali text-sm">डाटा अपलोड गर्नुहोस्</h4>
-                  <p className="text-sm text-green-700 mt-1">एक्सेल वा CSV फाइल मार्फत डाटाहरू प्रणालीमा भित्र्याउनुहोस्।</p>
+                  <p className="text-sm text-green-700 mt-1">CSV फाइल मार्फत डाटाहरू प्रणालीमा भित्र्याउनुहोस्।</p>
                 </div>
               </div>
 
@@ -259,7 +361,7 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                 <div className="space-y-6">
                   <Select 
                     label="१. डाटाको प्रकार छान्नुहोस् (Select Data Type)"
-                    options={uploadOptions}
+                    options={uploadOptions.filter(opt => opt.id === 'inventory')} // Only inventory for now
                     value={uploadTarget}
                     onChange={(e) => { 
                       setUploadTarget(e.target.value); 
@@ -309,7 +411,7 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                           <Info size={20} className="text-indigo-600 mt-0.5 shrink-0" />
                           <div>
                             <p className="font-black text-sm font-nepali text-indigo-900">फाइल तयारी निर्देशिका (File Preparation Guide):</p>
-                            <p className="text-xs mt-1 text-indigo-700 opacity-80">एक्सेल फाइलको पहिलो लहर (Row 1) मा निम्न कोलमहरू ठ्याक्कै हुनुपर्छ।</p>
+                            <p className="text-xs mt-1 text-indigo-700 opacity-80">CSV फाइलको पहिलो लहर (Row 1) मा निम्न कोलमहरू ठ्याक्कै हुनुपर्छ।</p>
                           </div>
                         </div>
 
@@ -352,14 +454,14 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                   <div className="space-y-3 pt-4">
                     <label className="text-sm font-black text-slate-700 font-nepali">४. फाइल छान्नुहोस् (Choose File)</label>
                     <div className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all relative group cursor-pointer ${selectedFile ? 'border-green-400 bg-green-50/20' : 'border-slate-300 bg-slate-50/50 hover:bg-slate-50 hover:border-primary-400'}`}>
-                      <input type="file" accept=".csv, .xlsx, .xls" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                      <input type="file" accept=".csv" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
                       <div className="flex flex-col items-center gap-4 pointer-events-none group-hover:scale-105 transition-transform duration-300">
                         <div className={`p-4 bg-white rounded-2xl shadow-md border ${selectedFile ? 'text-green-600 border-green-200' : 'text-slate-400 border-slate-100'}`}>
                           <FileUp size={40} />
                         </div>
                         <div>
-                          <p className="text-base font-bold text-slate-700">{selectedFile ? selectedFile.name : 'एक्सेल वा CSV फाइल यहाँ तान्नुहोस्'}</p>
-                          <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest">{selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : 'Only .xlsx or .csv'}</p>
+                          <p className="text-base font-bold text-slate-700">{selectedFile ? selectedFile.name : 'CSV फाइल यहाँ तान्नुहोस्'}</p>
+                          <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest">{selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : 'Only .csv files are supported'}</p>
                         </div>
                       </div>
                     </div>
@@ -375,6 +477,7 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                   </button>
                 </div>
                 {uploadSuccess && <div className="p-4 bg-green-50 border border-green-200 text-green-800 rounded-xl flex items-center gap-4 animate-in slide-in-from-top-2"><CheckCircle2 size={24} className="text-green-600" /><span className="font-bold text-sm">{uploadSuccess}</span></div>}
+                {uploadError && <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl flex items-center gap-4 animate-in slide-in-from-top-2"><AlertCircle size={24} className="text-red-600" /><span className="font-bold text-sm">{uploadError}</span></div>}
               </div>
             </div>
           </div>
