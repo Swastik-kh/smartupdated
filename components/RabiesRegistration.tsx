@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-/* Added ShieldCheck to lucide-react imports */
 import { Save, RotateCcw, Syringe, Calendar, FileDigit, User, Phone, MapPin, CalendarRange, Clock, CheckCircle2, Search, X, AlertTriangle, Trash2, Info, Activity, Filter, List, Globe, RefreshCw, Pencil, Building2, ShieldCheck } from 'lucide-react';
 import { Input } from './Input';
 import { Select } from './Select';
@@ -67,7 +66,7 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'today'>('all');
-  const [filterOrg, setFilterOrg] = useState<string>('all'); // Organization Filter
+  const [filterOrg, setFilterOrg] = useState<string>('all'); 
   const [showAllYears, setShowAllYears] = useState(true); 
   const [modalDateBs, setModalDateBs] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -83,7 +82,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
   const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
   const isAdmin = isSuperAdmin || currentUser.role === 'ADMIN' || currentUser.role === 'APPROVAL';
 
-  // Get unique organizations from patients for filter dropdown
   const orgOptions = useMemo(() => {
     const orgs = Array.from(new Set(patients.map(p => p.orgName).filter(Boolean)));
     return [{ id: 'all', value: 'all', label: 'सबै संस्थाहरू (All Organizations)' }, ...orgs.map(org => ({ id: org!, value: org!, label: org! }))];
@@ -168,18 +166,36 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
     }
   }, [patients.length, editingPatientId]);
 
+  /**
+   * Refined calculateSchedule to avoid timezone drift.
+   * Ensures that if D0 is 6th, D3 is strictly 9th and D7 is strictly 13th.
+   */
   const calculateSchedule = (startDateAd: string, regimen: string): VaccinationDose[] => {
-      if (!startDateAd || isNaN(new Date(startDateAd).getTime())) return [];
-      const start = new Date(startDateAd);
+      if (!startDateAd) return [];
+      
+      // Parse YYYY-MM-DD manually to avoid UTC conversion shifts
+      const parts = startDateAd.split('-');
+      if (parts.length !== 3) return [];
+      
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
+      const day = parseInt(parts[2]);
+
       const schedule: VaccinationDose[] = [];
       const days = regimen === 'Intradermal' ? [0, 3, 7] : [0, 3, 7, 14, 28];
       
       days.forEach(dayOffset => {
-          const doseDate = new Date(start);
-          doseDate.setDate(start.getDate() + dayOffset);
+          // Use local date object for arithmetic
+          const doseDate = new Date(year, month, day);
+          doseDate.setDate(doseDate.getDate() + dayOffset);
+          
+          const y = doseDate.getFullYear();
+          const m = String(doseDate.getMonth() + 1).padStart(2, '0');
+          const d = String(doseDate.getDate()).padStart(2, '0');
+          
           schedule.push({
               day: dayOffset,
-              date: doseDate.toISOString().split('T')[0],
+              date: `${y}-${m}-${d}`,
               status: 'Pending'
           });
       });
@@ -196,7 +212,10 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
                 const [y, m, d] = parts.map(Number);
                 month = String(m).padStart(2, '0');
                 const nd = new NepaliDate(y, m - 1, d);
-                adDateStr = nd.toJsDate().toISOString().split('T')[0];
+                const jsDate = nd.toJsDate();
+                adDateStr = jsDate.getFullYear() + '-' + 
+                            String(jsDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                            String(jsDate.getDate()).padStart(2, '0');
             }
         } catch (e) {
             console.error("Date conversion error", e);
@@ -244,6 +263,8 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           if (editingPatientId) {
               const originalPatient = patients.find(p => p.id === editingPatientId);
               let finalSchedule = originalPatient?.schedule || [];
+              
+              // If regimen or D0 date changed, recalculate the entire schedule
               if (originalPatient?.regimen !== formData.regimen || originalPatient?.regDateAd !== formData.regDateAd) {
                   finalSchedule = calculateSchedule(formData.regDateAd, formData.regimen);
               }
@@ -297,16 +318,18 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           return;
       }
 
+      // Business Rule: D3/D7 cannot be before D0
       if (dose.day !== 0 && givenDateAd < dose.date) {
           alert(`त्रुटि: खोप लगाएको मिति निर्धारित मिति (${dose.date}) भन्दा अगाडि हुन सक्दैन।`);
           return;
       }
 
       if (dose.day === 0) {
+          // IF D0 is changed, recalculate all subsequent target dates
           const newSchedule = calculateSchedule(givenDateAd, patient.regimen);
           newSchedule[0].status = 'Given';
           newSchedule[0].givenDate = givenDateAd;
-          await onUpdatePatient({ ...patient, schedule: newSchedule });
+          await onUpdatePatient({ ...patient, regDateAd: givenDateAd, schedule: newSchedule });
           alert("Day 0 मिति परिवर्तन भएकोले अन्य डोजहरूको तालिका स्वतः अपडेट गरिएको छ।");
       } else {
           const updatedSchedule = [...(patient.schedule || [])];
@@ -336,7 +359,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           const matchesFY = showAllYears || (p.fiscalYear === currentFiscalYear);
           if (!matchesFY) return false;
           
-          // Organization Filter for Super Admin
           if (isSuperAdmin && filterOrg !== 'all') {
               if (p.orgName !== filterOrg) return false;
           }
@@ -368,7 +390,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
     }
   }, [selectedDoseInfo]);
 
-  // NEW: Convert actual given date (AD) to BS for display in given message
   const givenDateBsValue = useMemo(() => {
     if (!selectedDoseInfo?.dose?.givenDate) return '';
     try {
@@ -404,7 +425,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           </div>
       )}
 
-      {/* Registration Form - Hidden for Super Admin if not registering themselves */}
       {!isSuperAdmin && (
         <div className={`bg-white p-8 rounded-2xl border shadow-xl relative overflow-hidden no-print transition-all ${editingPatientId ? 'ring-2 ring-indigo-500 border-indigo-100' : 'border-slate-200'}`}>
             {editingPatientId && (
@@ -446,7 +466,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
         </div>
       )}
 
-      {/* Patients List Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-lg">
           <div className="px-8 py-5 border-b border-slate-100 bg-slate-50/50 flex flex-col lg:flex-row justify-between items-center gap-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -458,7 +477,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
                   </div>
                 </div>
                 
-                {/* Filters */}
                 <div className="flex flex-wrap gap-2 no-print">
                    <div className="flex bg-slate-200/50 p-1 rounded-xl">
                       <button onClick={() => setFilterType('all')} className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filterType === 'all' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}><List size={14} /> सबै</button>
@@ -554,7 +572,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           </div>
       </div>
 
-      {/* Dose Update Modal */}
       {selectedDoseInfo && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setSelectedDoseInfo(null)}></div>
