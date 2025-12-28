@@ -101,20 +101,10 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
     const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
-    const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
+    const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_") || "unknown";
     const orgPath = `orgData/${safeOrgName}`;
     const unsubscribes: Unsubscribe[] = [];
 
-    // Basic Org Listener for individual orgs
-    const setupOrgListener = (subPath: string, setter: Function) => {
-        const unsub = onValue(ref(db, `${orgPath}/${subPath}`), (snap) => {
-            const data = snap.val();
-            setter(data ? Object.keys(data).map(key => ({ ...data[key], id: key })) : []);
-        });
-        unsubscribes.push(unsub);
-    };
-
-    // Global listener for SUPER_ADMIN to aggregate data across all orgs
     if (isSuperAdmin) {
         const allOrgsRef = ref(db, 'orgData');
         const unsubGlobal = onValue(allOrgsRef, (snap) => {
@@ -184,22 +174,31 @@ const App: React.FC = () => {
         unsubscribes.push(unsubGlobal);
     } else {
         // Normal scoped fetching for other roles
-        setupOrgListener('inventory', setInventoryItems);
-        setupOrgListener('stores', setStores);
-        setupOrgListener('magForms', setMagForms);
-        setupOrgListener('hafaEntries', setHafaEntries);
-        setupOrgListener('purchaseOrders', setPurchaseOrders);
-        setupOrgListener('issueReports', setIssueReports);
-        setupOrgListener('stockRequests', setStockEntryRequests);
-        setupOrgListener('dakhilaReports', setDakhilaReports);
-        setupOrgListener('returnEntries', setReturnEntries);
-        setupOrgListener('firms', setFirms);
-        setupOrgListener('quotations', setQuotations);
-        setupOrgListener('tbPatients', setTbPatients);
-        setupOrgListener('marmatEntries', setMarmatEntries);
-        setupOrgListener('disposalEntries', setDhuliyaunaEntries);
-        setupOrgListener('logBook', setLogBookEntries);
-        setupOrgListener('rabiesPatients', setRabiesPatients);
+        const currentOrgName = currentUser.organizationName; // Get current user's org name once
+        const setupScopedOrgListener = (subPath: string, setter: Function) => {
+            const unsub = onValue(ref(db, `${orgPath}/${subPath}`), (snap) => {
+                const data = snap.val();
+                setter(data ? Object.keys(data).map(key => ({ ...data[key], id: key, orgName: currentOrgName })) : []);
+            });
+            unsubscribes.push(unsub);
+        };
+
+        setupScopedOrgListener('inventory', setInventoryItems);
+        setupScopedOrgListener('stores', setStores);
+        setupScopedOrgListener('magForms', setMagForms);
+        setupScopedOrgListener('hafaEntries', setHafaEntries);
+        setupScopedOrgListener('purchaseOrders', setPurchaseOrders);
+        setupScopedOrgListener('issueReports', setIssueReports);
+        setupScopedOrgListener('stockRequests', setStockEntryRequests);
+        setupScopedOrgListener('dakhilaReports', setDakhilaReports);
+        setupScopedOrgListener('returnEntries', setReturnEntries);
+        setupScopedOrgListener('firms', setFirms);
+        setupScopedOrgListener('quotations', setQuotations);
+        setupScopedOrgListener('tbPatients', setTbPatients);
+        setupScopedOrgListener('marmatEntries', setMarmatEntries);
+        setupScopedOrgListener('disposalEntries', setDhuliyaunaEntries);
+        setupScopedOrgListener('logBook', setLogBookEntries);
+        setupScopedOrgListener('rabiesPatients', setRabiesPatients);
     }
 
     // Always fetch settings for current org to show in header/UI
