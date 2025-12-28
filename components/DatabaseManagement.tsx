@@ -17,6 +17,12 @@ interface DatabaseManagementProps {
   onClearData?: (sectionId: string) => void;
 }
 
+interface ColumnSpec {
+  header: string;
+  example: string;
+  desc?: string;
+}
+
 export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
   currentUser,
   users,
@@ -51,7 +57,7 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
     return stores.map(s => ({
       id: s.id,
       value: s.id,
-      label: `${s.name} (${s.address || 'No Address'})`
+      label: s.orgName ? `${s.name} - [${s.orgName}]` : s.name
     }));
   }, [stores]);
 
@@ -62,6 +68,52 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
       label: section.title
     }));
   }, [dataSections]);
+
+  const fileFormatSpecs: Record<string, ColumnSpec[]> = {
+    users: [
+      { header: "username", example: "admin_user" },
+      { header: "password", example: "pass123" },
+      { header: "role", example: "STAFF" },
+      { header: "fullName", example: "Ram Prasad" },
+      { header: "designation", example: "Assistant" },
+      { header: "phoneNumber", example: "9812345678" },
+      { header: "organizationName", example: "Municipal Office" }
+    ],
+    inventory: [
+      { header: "itemName", example: "Paracetamol 500mg", desc: "सामानको नाम" },
+      { header: "itemType", example: "Expendable", desc: "Expendable (खर्च हुने) वा Non-Expendable (नहुने)" },
+      { header: "itemClassification", example: "Medicine", desc: "वर्गीकरण (Medicine, Furniture etc)" },
+      { header: "unit", example: "Strip", desc: "एकाई (Box, Pkt, No)" },
+      { header: "currentQuantity", example: "500", desc: "हालको परिमाण" },
+      { header: "rate", example: "10.50", desc: "प्रति इकाई दर" },
+      { header: "uniqueCode", example: "UC-81-001", desc: "युनिक कोड" },
+      { header: "sanketNo", example: "S-101", desc: "संकेत नं." },
+      { header: "ledgerPageNo", example: "42", desc: "जिन्सी खाता पाना नं." },
+      { header: "specification", example: "Antipyretic", desc: "सामानको विवरण/बिशेषता" },
+      { header: "batchNo", example: "BTCH-45", desc: "ब्याच नम्बर" },
+      { header: "expiryDateAd", example: "2026-12-31", desc: "म्याद सकिने मिति (AD)" },
+      { header: "remarks", example: "Urgent Stock", desc: "कैफियत" }
+    ],
+    rabies: [
+      { header: "regNo", example: "R-81-001" },
+      { header: "name", example: "Shyam Thapa" },
+      { header: "age", example: "25" },
+      { header: "sex", example: "Male" },
+      { header: "address", example: "Beltar-3" },
+      { header: "phone", example: "9812345678" },
+      { header: "animalType", example: "Dog bite" },
+      { header: "exposureCategory", example: "Category III" },
+      { header: "regimen", example: "Intradermal" },
+      { header: "regDateBs", example: "2081-05-15" }
+    ],
+    firms: [
+      { header: "firmRegNo", example: "F-81-001" },
+      { header: "firmName", example: "Aayush Pharma" },
+      { header: "vatPan", example: "302455677" },
+      { header: "address", example: "Udayapur" },
+      { header: "contactNo", example: "9812345678" }
+    ]
+  };
 
   if (currentUser.role !== 'SUPER_ADMIN') {
     return (
@@ -85,11 +137,14 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
     link.click();
   };
 
-  const convertToCSV = (objArray: any[]) => {
-    if (!objArray || objArray.length === 0) return '';
-    const headers = Object.keys(objArray[0]);
+  const downloadCSV = (data: any[], filename: string) => {
+    if (data.length === 0) {
+      alert("डाउनलोड गर्नको लागि कुनै डाटा छैन");
+      return;
+    }
+    const headers = Object.keys(data[0]);
     const csvRows = [headers.join(',')];
-    for (const row of objArray) {
+    for (const row of data) {
       const values = headers.map(header => {
         const val = row[header];
         const escaped = ('' + (typeof val === 'object' ? JSON.stringify(val) : val)).replace(/"/g, '\\"');
@@ -97,15 +152,7 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
       });
       csvRows.push(values.join(','));
     }
-    return csvRows.join('\n');
-  };
-
-  const downloadCSV = (data: any[], filename: string) => {
-    if (data.length === 0) {
-      alert("डाउनलोड गर्नको लागि कुनै डाटा छैन");
-      return;
-    }
-    const csvString = convertToCSV(data);
+    const csvString = csvRows.join('\n');
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -142,17 +189,6 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
     if (window.confirm(`के तपाईं निश्चित हुनुहुन्छ कि तपाईं "${title}" को सम्पूर्ण डाटा मेटाउन चाहनुहुन्छ?`)) {
       if (onClearData) onClearData(sectionId);
     }
-  };
-
-  const fileFormatSpecs: Record<string, string> = {
-    users: "username, password, role, fullName, designation, phoneNumber, organizationName",
-    mag_forms: "fiscalYear, formNo, date, status",
-    purchase_orders: "magFormNo, requestDate, status, vendorName",
-    issue_reports: "magFormNo, issueDate, status, demandBy",
-    rabies: "regNo, name, age, sex, address, phone, regimen",
-    firms: "firmName, vatPan, address, contactNo",
-    stores: "name, address, contactPerson, contactPhone",
-    inventory: "itemName, itemType, unit, currentQuantity, rate, batchNo, expiryDateAd, uniqueCode, sanketNo"
   };
 
   return (
@@ -215,12 +251,12 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                 <Upload className="text-green-600 mt-1" size={20} />
                 <div>
                   <h4 className="font-bold text-green-800 font-nepali text-sm">डाटा अपलोड गर्नुहोस्</h4>
-                  <p className="text-sm text-green-700 mt-1">एक्सेल फाइल मार्फत डाटाहरू प्रणालीमा प्रविष्ट गर्नुहोस्।</p>
+                  <p className="text-sm text-green-700 mt-1">एक्सेल वा CSV फाइल मार्फत डाटाहरू प्रणालीमा भित्र्याउनुहोस्।</p>
                 </div>
               </div>
 
               <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-8">
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <Select 
                     label="१. डाटाको प्रकार छान्नुहोस् (Select Data Type)"
                     options={uploadOptions}
@@ -259,29 +295,61 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                     </div>
                   )}
 
-                  {uploadTarget && (
+                  {uploadTarget && fileFormatSpecs[uploadTarget] && (
                     <div className="space-y-6 animate-in fade-in duration-300">
                       <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
                         <div className="flex items-center gap-2 text-indigo-700">
                           <TableIcon size={20} />
-                          <h4 className="font-bold font-nepali text-sm">३. फाइलको कोलम विवरण (Headers)</h4>
+                          <h4 className="font-bold font-nepali text-sm">३. फाइलको ढाँचा र कोलम विवरण (File Structure & Examples)</h4>
                         </div>
                       </div>
                       
-                      <div className="bg-blue-50 border border-blue-200 text-blue-800 px-5 py-4 rounded-xl text-xs flex items-start gap-3">
-                        <Info size={18} className="mt-0.5 shrink-0" />
-                        <div className="flex-1">
-                          <span className="font-bold block mb-2 text-sm">कोलमको नामहरू (Headers):</span>
-                          <div className="font-mono bg-white p-3 rounded-lg border border-blue-200 break-all leading-relaxed shadow-inner">
-                            {fileFormatSpecs[uploadTarget]}
+                      <div className="bg-indigo-50 border border-indigo-200 rounded-2xl shadow-sm overflow-hidden">
+                        <div className="p-4 flex items-start gap-3 bg-white/50">
+                          <Info size={20} className="text-indigo-600 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="font-black text-sm font-nepali text-indigo-900">फाइल तयारी निर्देशिका (File Preparation Guide):</p>
+                            <p className="text-xs mt-1 text-indigo-700 opacity-80">एक्सेल फाइलको पहिलो लहर (Row 1) मा निम्न कोलमहरू ठ्याक्कै हुनुपर्छ।</p>
                           </div>
-                          <p className="mt-3 text-[10px] text-blue-600 font-bold italic">* फाइलमा पहिलो लहर (Row 1) मा यी नामहरू ठ्याक्कै हुनुपर्छ।</p>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-left border-collapse bg-white">
+                                <thead className="bg-indigo-600 text-white uppercase tracking-wider font-bold">
+                                    <tr>
+                                        <th className="px-4 py-3 border-r border-indigo-500 w-12 text-center">S.N.</th>
+                                        <th className="px-4 py-3 border-r border-indigo-500">Header Name (Row 1)</th>
+                                        <th className="px-4 py-3">Example Data & Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {fileFormatSpecs[uploadTarget].map((spec, idx) => (
+                                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                            <td className="px-4 py-2.5 border-r border-indigo-100 text-center font-bold text-slate-400">{idx + 1}</td>
+                                            <td className="px-4 py-2.5 border-r border-indigo-100 font-mono font-bold text-indigo-700">{spec.header}</td>
+                                            <td className="px-4 py-2.5">
+                                                <div className="flex flex-col">
+                                                    <span className="italic text-slate-700 font-medium">उदा: {spec.example}</span>
+                                                    {spec.desc && <span className="text-[10px] text-slate-400 font-nepali mt-0.5">{spec.desc}</span>}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="p-3 bg-indigo-100/50">
+                           <p className="text-[10px] text-red-600 font-black flex items-center gap-2">
+                              <OctagonAlert size={14} />
+                              चेतावनी: कोलमको स्पेलिङ (Spelling) गलत भएमा वा क्रम परिवर्तन भएमा डाटा अपलोड असफल हुनेछ। 'itemType' कोलममा अनिवार्य रूपमा 'Expendable' वा 'Non-Expendable' लेख्नुहोस्।
+                           </p>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  <div className="space-y-3">
+                  <div className="space-y-3 pt-4">
                     <label className="text-sm font-black text-slate-700 font-nepali">४. फाइल छान्नुहोस् (Choose File)</label>
                     <div className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all relative group cursor-pointer ${selectedFile ? 'border-green-400 bg-green-50/20' : 'border-slate-300 bg-slate-50/50 hover:bg-slate-50 hover:border-primary-400'}`}>
                       <input type="file" accept=".csv, .xlsx, .xls" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />

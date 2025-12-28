@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Package, Calendar, Plus, RotateCcw, Save, X, CheckCircle2, Search, 
@@ -306,6 +305,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
             const parts = String(item.dakhilaNo).split('-');
             if (parts.length >= 2 && parts[1] === 'DA') {
                 const num = parseInt(parts[0]);
+                /* Fix: replaced 'val' with 'num' to resolve "Cannot find name 'val'" error */
                 return isNaN(num) ? max : Math.max(max, num);
             }
             return max;
@@ -321,9 +321,10 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
         supplier: '', 
         refNo: '',    
         dakhilaNo: initialDakhilaNo, 
+        masterItemType: '' as 'Expendable' | 'Non-Expendable' | ''
     });
     
-    const createEmptyBulkItem = useCallback((currentMode: 'opening' | 'add', storeIdForNewItem: string): InventoryItem => {
+    const createEmptyBulkItem = useCallback((currentMode: 'opening' | 'add', storeIdForNewItem: string, masterType: string = ''): InventoryItem => {
         return {
             id: `TEMP-${Date.now()}-${Math.random().toString(36).substring(7)}`, 
             itemName: '',
@@ -331,7 +332,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
             sanketNo: '',
             ledgerPageNo: '',
             dakhilaNo: '', 
-            itemType: '' as 'Expendable' | 'Non-Expendable',
+            itemType: (masterType || '') as 'Expendable' | 'Non-Expendable',
             itemClassification: '',
             specification: '', 
             unit: '',
@@ -359,7 +360,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
         }
     }, []);
 
-    // Effect to pre-load PO data and intelligently match existing items
+    // Effect to pre-load PO data
     useEffect(() => {
         if (initialData) {
             setCommonDetails(prev => ({
@@ -375,7 +376,6 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                 const qty = parseFloat(poItem.quantity.toString()) || 0;
                 const rt = parseFloat(poItem.rate?.toString() || '0') || 0;
                 
-                // INTELLIGENT MATCHING: Check if this item already exists in inventory
                 const existingInfo = inventoryItems.find(i => 
                     i.itemName.trim().toLowerCase() === poItem.name.trim().toLowerCase()
                 );
@@ -407,8 +407,6 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
     const [showAddClassificationModal, setShowAddClassificationModal] = useState(false); 
     const [showAddSourceModal, setShowAddSourceModal] = useState(false); 
 
-    const masterType = bulkItems.length > 0 ? bulkItems[0].itemType : '';
-
     const allInventoryItemOptions: Option[] = useMemo(() => {
         return inventoryItems.map(item => ({
             id: item.id,
@@ -419,16 +417,17 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
     }, [inventoryItems]);
 
     const filteredInventoryItemOptions: Option[] = useMemo(() => {
-        if (!masterType) return allInventoryItemOptions;
+        const typeFilter = commonDetails.masterItemType;
+        if (!typeFilter) return allInventoryItemOptions;
         return inventoryItems
-            .filter(item => item.itemType === masterType) 
+            .filter(item => item.itemType === typeFilter) 
             .map(item => ({
                 id: item.id,
                 value: item.itemName,
                 label: `${item.itemName} (${item.unit}) - ${item.uniqueCode || item.sanketNo || ''}`,
                 itemData: item
             }));
-    }, [inventoryItems, masterType, allInventoryItemOptions]);
+    }, [inventoryItems, commonDetails.masterItemType, allInventoryItemOptions]);
 
 
     const generateNewSequentialCode = useCallback((
@@ -454,20 +453,17 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
 
 
     const handleAddRow = () => {
-        const masterType = bulkItems.length > 0 ? bulkItems[0].itemType : '';
-        const newItem = createEmptyBulkItem(mode, commonDetails.storeId);
-        if (masterType) newItem.itemType = masterType;
+        const newItem = createEmptyBulkItem(mode, commonDetails.storeId, commonDetails.masterItemType);
         setBulkItems(prev => [...prev, newItem]);
     };
 
     const handleRemoveRow = (id: string) => {
         setBulkItems(prev => prev.filter(item => item.id !== id));
-        if (bulkItems.length === 1) setBulkItems([createEmptyBulkItem(mode, commonDetails.storeId)]); 
+        if (bulkItems.length === 1) setBulkItems([createEmptyBulkItem(mode, commonDetails.storeId, commonDetails.masterItemType)]); 
     };
 
     const handleItemFieldChange = (itemId: string, field: keyof InventoryItem, value: string | number) => {
         setBulkItems(prev => {
-            const isFirstRow = prev.length > 0 && prev[0].id === itemId;
             return prev.map(item => {
                 if (item.id === itemId) {
                     const updatedItem = { ...item, [field]: value };
@@ -475,9 +471,6 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                         updatedItem.totalAmount = calculateTotalAmount(updatedItem.currentQuantity || 0, updatedItem.rate || 0, updatedItem.tax || 0);
                     }
                     return updatedItem;
-                }
-                if (isFirstRow && field === 'itemType') {
-                    return { ...item, itemType: value as any };
                 }
                 return item;
             });
@@ -488,8 +481,6 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
         const selectedInvItem = option.itemData as InventoryItem;
         if (!selectedInvItem) return;
         setBulkItems(prev => {
-            const masterType = prev.length > 0 ? prev[0].itemType : '';
-            const isFirstRow = prev.length > 0 && prev[0].id === itemId;
             return prev.map(row => {
                 if (row.id === itemId) {
                     const updatedItem = {
@@ -506,9 +497,6 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                         rate: selectedInvItem.rate || 0,
                         tax: selectedInvItem.tax || 0
                     };
-                    if (!isFirstRow && masterType && updatedItem.itemType !== masterType) {
-                        updatedItem.itemType = masterType;
-                    }
                     updatedItem.totalAmount = calculateTotalAmount(updatedItem.currentQuantity || 0, updatedItem.rate || 0, updatedItem.tax || 0);
                     return updatedItem;
                 }
@@ -519,9 +507,6 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
 
     const handleItemNameChange = (itemId: string, newName: string) => {
         setBulkItems(prev => {
-            const masterType = prev.length > 0 ? prev[0].itemType : '';
-            const isFirstRow = prev.length > 0 && prev[0].id === itemId;
-
             return prev.map(item => {
             if (item.id === itemId) {
                 let updatedItem = { ...item, itemName: newName };
@@ -535,7 +520,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                     updatedItem.uniqueCode = existing.uniqueCode || '';
                     updatedItem.sanketNo = existing.sanketNo || '';
                     updatedItem.ledgerPageNo = existing.ledgerPageNo || '';
-                    if (!isFirstRow && masterType) { updatedItem.itemType = masterType; } else { updatedItem.itemType = existing.itemType; }
+                    updatedItem.itemType = existing.itemType;
                     updatedItem.itemClassification = existing.itemClassification || '';
                     updatedItem.specification = existing.specification || ''; 
                     updatedItem.unit = existing.unit;
@@ -552,15 +537,14 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                         updatedItem.uniqueCode = generateNewSequentialCode('UC', currentFiscalYear, inventoryItems, otherDraftItems, 'uniqueCode');
                     }
                     updatedItem.unit = '';
-                    if (!isFirstRow && masterType) { updatedItem.itemType = masterType; } else { updatedItem.itemType = '' as 'Expendable' | 'Non-Expendable'; }
+                    updatedItem.itemType = (commonDetails.masterItemType || '') as any;
                     updatedItem.itemClassification = ''; updatedItem.specification = ''; updatedItem.ledgerPageNo = '';
                     updatedItem.rate = undefined; updatedItem.tax = undefined; updatedItem.batchNo = '';
                     updatedItem.expiryDateBs = ''; updatedItem.expiryDateAd = ''; updatedItem.remarks = '';
                 } else {
                     const originalId = item.id;
-                    updatedItem = createEmptyBulkItem(mode, commonDetails.storeId);
+                    updatedItem = createEmptyBulkItem(mode, commonDetails.storeId, commonDetails.masterItemType);
                     updatedItem.id = originalId;
-                    if (!isFirstRow && masterType) updatedItem.itemType = masterType;
                 }
                 updatedItem.totalAmount = calculateTotalAmount(updatedItem.currentQuantity || 0, updatedItem.rate || 0, updatedItem.tax || 0);
                 return updatedItem;
@@ -570,7 +554,17 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
     };
 
     const handleCommonDetailsChange = (field: keyof typeof commonDetails, value: string) => {
-        setCommonDetails(prev => ({ ...prev, [field]: value }));
+        setCommonDetails(prev => {
+            const updated = { ...prev, [field]: value };
+            // If Master Type is changed, update all existing rows that don't have a specific type yet
+            if (field === 'masterItemType' && value) {
+                setBulkItems(items => items.map(item => ({
+                    ...item,
+                    itemType: (item.itemType || value) as any
+                })));
+            }
+            return updated;
+        });
     };
 
     const handleSaveBulk = async (e: React.FormEvent) => {
@@ -615,7 +609,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
             const isExistingItemInSelectedStore = inventoryItems.some(i => i.itemName.toLowerCase() === item.itemName.toLowerCase() && i.storeId === commonDetails.storeId);
 
             if (!item.itemName.trim()) { setValidationError(`क्रम संख्या ${itemNumber} मा सामानको नाम आवश्यक छ।`); hasError = true; }
-            if (!item.itemType) { setValidationError(`क्रम संख्या ${itemNumber} मा सामानको प्रकार आवश्यक छ।`); hasError = true; }
+            if (!item.itemType) { setValidationError(`क्रम संख्या ${itemNumber} मा सामानको प्रकार (Expendable/Non-Expendable) आवश्यक छ।`); hasError = true; }
             if (!item.unit.trim()) { setValidationError(`क्रम संख्या ${itemNumber} मा एकाई आवश्यक छ।`); hasError = true; }
             const qtyNum = parseFloat(item.currentQuantity.toString()) || 0;
             if (qtyNum <= 0) { setValidationError(`क्रम संख्या ${itemNumber} मा मान्य परिमाण आवश्यक छ।`); hasError = true; }
@@ -700,16 +694,17 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                             </div>
                         </div>
                     )}
-                    <div className="grid md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-100">
+                    <div className="grid md:grid-cols-5 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-100">
                         <Input label="आर्थिक वर्ष" value={currentFiscalYear} readOnly disabled icon={<Calendar size={16} />} tabIndex={-1} />
                         <Select label="गोदाम/स्टोर *" options={storeOptions} value={commonDetails.storeId} onChange={e => handleCommonDetailsChange('storeId', e.target.value)} required icon={<StoreIcon size={16} />} disabled={isSaving} />
                         <Select label="प्राप्तिको स्रोत" options={mode === 'opening' ? [{ id: 'opening', value: 'Opening', label: 'ओपनिङ्ग' }] : receiptSourceOptions} value={commonDetails.receiptSource} onChange={e => handleCommonDetailsChange('receiptSource', e.target.value)} required icon={<ArrowUpCircle size={16} />} disabled={mode === 'opening' || isSaving} />
                         <NepaliDatePicker label="मिति (BS)" value={commonDetails.dateBs} onChange={val => handleCommonDetailsChange('dateBs', val)} required minDate={todayBs} maxDate={todayBs} disabled={isSaving} />
+                        <Select label="सामानको प्रकार (साझा) *" options={itemTypeOptions} value={commonDetails.masterItemType} onChange={e => handleCommonDetailsChange('masterItemType', e.target.value)} required placeholder="-- प्रकार छान्नुहोस् --" icon={<List size={16} />} disabled={isSaving} />
                         <div className="col-span-2"><Input label="आपूर्तिकर्ता / स्रोत" value={commonDetails.supplier} onChange={(e) => handleCommonDetailsChange('supplier', e.target.value)} placeholder="Supplier Name" icon={<User size={16} />} disabled={isSaving} /></div>
-                        <div className="col-span-1"><Input label="खरिद आदेश / हस्तान्तरण नं" value={commonDetails.refNo} onChange={(e) => handleCommonDetailsChange('refNo', e.target.value)} placeholder="PO / Hafa No" icon={<FileText size={16} />} disabled={isSaving} /></div>
+                        <div className="col-span-2"><Input label="खरिद आदेश / हस्तान्तरण नं" value={commonDetails.refNo} onChange={(e) => handleCommonDetailsChange('refNo', e.target.value)} placeholder="PO / Hafa No" icon={<FileText size={16} />} disabled={isSaving} /></div>
                         {mode === 'add' && <div className="col-span-1"><Input label="दाखिला नं *" value={commonDetails.dakhilaNo} onChange={(e) => handleCommonDetailsChange('dakhilaNo', e.target.value)} required icon={<Hash size={16} />} className="font-bold text-purple-700" disabled={isSaving} /></div>}
                     </div>
-                    {validationError && <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded-r-xl text-red-700 text-sm">{validationError}</div>}
+                    {validationError && <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded-r-xl text-red-700 text-sm whitespace-pre-line leading-relaxed">{validationError}</div>}
                     <div className="border border-slate-200 rounded-lg overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-50 text-slate-600 font-medium">
@@ -719,7 +714,7 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                                     <th className="px-3 py-2 w-24">खाता पाना नं</th>
                                     <th className="px-3 py-2 w-24">युनिक कोड</th>
                                     <th className="px-3 py-2 w-24">सङ्केत नं</th>
-                                    <th className="px-3 py-2 w-24">प्रकार</th>
+                                    <th className="px-3 py-2 w-32">प्रकार (Type)</th>
                                     <th className="px-3 py-2 w-24">वर्गीकरण</th>
                                     <th className="px-3 py-2 w-20">एकाई</th>
                                     <th className="px-3 py-2 w-20">परिमाण</th>
@@ -736,11 +731,11 @@ const BulkInventoryEntryModal: React.FC<BulkInventoryEntryModalProps> = ({
                                 {bulkItems.map((item, index) => (
                                     <tr key={item.id} className="border-t border-slate-100">
                                         <td className="px-3 py-2 text-center">{index + 1}</td>
-                                        <td className="px-1 py-1"><SearchableSelect options={index === 0 ? allInventoryItemOptions : filteredInventoryItemOptions} value={item.itemName} onChange={newName => handleItemNameChange(item.id, newName)} onSelect={(option) => handleItemSelect(item.id, option)} placeholder="सामान छान्नुहोस्" className="!pl-3 !pr-8" label="" disabled={isSaving} /></td>
+                                        <td className="px-1 py-1"><SearchableSelect options={filteredInventoryItemOptions} value={item.itemName} onChange={newName => handleItemNameChange(item.id, newName)} onSelect={(option) => handleItemSelect(item.id, option)} placeholder="सामान छान्नुहोस्" className="!pl-3 !pr-8" label="" disabled={isSaving} /></td>
                                         <td className="px-1 py-1"><Input value={item.ledgerPageNo || ''} onChange={e => handleItemFieldChange(item.id, 'ledgerPageNo', e.target.value)} placeholder="पाना नं" className="!pl-3" label="" icon={undefined} disabled={isSaving}/></td>
                                         <td className="px-1 py-1"><Input value={item.uniqueCode || ''} onChange={e => handleItemFieldChange(item.id, 'uniqueCode', e.target.value)} placeholder="कोड" className="!pl-3" label="" icon={undefined} disabled={isSaving}/></td>
                                         <td className="px-1 py-1"><Input value={item.sanketNo || ''} onChange={e => handleItemFieldChange(item.id, 'sanketNo', e.target.value)} placeholder="सङ्केत नं" className="!pl-3" label="" icon={undefined} disabled={isSaving}/></td>
-                                        <td className="px-1 py-1"><Select options={itemTypeOptions} value={item.itemType} onChange={e => handleItemFieldChange(item.id, 'itemType', e.target.value as any)} placeholder="-- प्रकार --" className={`!pl-3 !pr-8 ${index > 0 && !item.itemType ? '' : ''}`} icon={undefined} label="" disabled={(index > 0 && !!bulkItems[0].itemType) || isSaving} /></td>
+                                        <td className="px-1 py-1"><Select options={itemTypeOptions} value={item.itemType} onChange={e => handleItemFieldChange(item.id, 'itemType', e.target.value as any)} placeholder="-- प्रकार --" className="!pl-3 !pr-8 font-bold" icon={undefined} label="" disabled={isSaving} /></td>
                                         <td className="px-1 py-1"><Select options={itemClassificationOptions} value={item.itemClassification || ''} onChange={e => handleItemFieldChange(item.id, 'itemClassification', e.target.value)} placeholder="-- वर्गीकरण --" className="!pl-3 !pr-8" icon={undefined} label="" onAddOptionHotkeyTriggered={() => setShowAddClassificationModal(true)} addOptionHotkey="Alt+c" disabled={isSaving} /></td>
                                         <td className="px-1 py-1"><Input value={item.unit} onChange={e => handleItemFieldChange(item.id, 'unit', e.target.value)} placeholder="एकाई" className="!pl-3" label="" icon={undefined} disabled={isSaving}/></td>
                                         <td className="px-1 py-1"><Input type="number" value={item.currentQuantity === 0 ? '' : item.currentQuantity} onChange={e => handleItemFieldChange(item.id, 'currentQuantity', e.target.value)} placeholder="०" className="text-center !pl-3" label="" icon={undefined} disabled={isSaving}/></td>

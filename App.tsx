@@ -100,10 +100,12 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!currentUser) return;
+    const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
     const safeOrgName = currentUser.organizationName.trim().replace(/[.#$[\]]/g, "_");
     const orgPath = `orgData/${safeOrgName}`;
     const unsubscribes: Unsubscribe[] = [];
 
+    // Basic Org Listener for individual orgs
     const setupOrgListener = (subPath: string, setter: Function) => {
         const unsub = onValue(ref(db, `${orgPath}/${subPath}`), (snap) => {
             const data = snap.val();
@@ -112,6 +114,95 @@ const App: React.FC = () => {
         unsubscribes.push(unsub);
     };
 
+    // Global listener for SUPER_ADMIN to aggregate data across all orgs
+    if (isSuperAdmin) {
+        const allOrgsRef = ref(db, 'orgData');
+        const unsubGlobal = onValue(allOrgsRef, (snap) => {
+            const rootData = snap.val();
+            if (rootData) {
+                const aggregatedStores: Store[] = [];
+                const aggregatedInventory: InventoryItem[] = [];
+                const aggregatedMagForms: MagFormEntry[] = [];
+                const aggregatedHafa: HafaEntry[] = [];
+                const aggregatedPurchaseOrders: PurchaseOrderEntry[] = [];
+                const aggregatedIssueReports: IssueReportEntry[] = [];
+                const aggregatedStockRequests: StockEntryRequest[] = [];
+                const aggregatedDakhila: DakhilaPratibedanEntry[] = [];
+                const aggregatedReturns: ReturnEntry[] = [];
+                const aggregatedFirms: FirmEntry[] = [];
+                const aggregatedQuotations: QuotationEntry[] = [];
+                const aggregatedRabies: RabiesPatient[] = [];
+                const aggregatedTB: TBPatient[] = [];
+                const aggregatedMarmat: MarmatEntry[] = [];
+                const aggregatedDisposal: DhuliyaunaEntry[] = [];
+                const aggregatedLog: LogBookEntry[] = [];
+
+                Object.keys(rootData).forEach(orgKey => {
+                    const orgNode = rootData[orgKey];
+                    const orgName = orgNode.settings?.orgNameNepali || orgKey;
+
+                    // Helper to flatten and inject orgName
+                    const flatten = (data: any, orgName: string) => 
+                        data ? Object.keys(data).map(key => ({ ...data[key], id: key, orgName })) : [];
+
+                    aggregatedStores.push(...flatten(orgNode.stores, orgName));
+                    aggregatedInventory.push(...flatten(orgNode.inventory, orgName));
+                    aggregatedMagForms.push(...flatten(orgNode.magForms, orgName));
+                    aggregatedHafa.push(...flatten(orgNode.hafaEntries, orgName));
+                    aggregatedPurchaseOrders.push(...flatten(orgNode.purchaseOrders, orgName));
+                    aggregatedIssueReports.push(...flatten(orgNode.issueReports, orgName));
+                    aggregatedStockRequests.push(...flatten(orgNode.stockRequests, orgName));
+                    aggregatedDakhila.push(...flatten(orgNode.dakhilaReports, orgName));
+                    aggregatedReturns.push(...flatten(orgNode.returnEntries, orgName));
+                    aggregatedFirms.push(...flatten(orgNode.firms, orgName));
+                    aggregatedQuotations.push(...flatten(orgNode.quotations, orgName));
+                    aggregatedRabies.push(...flatten(orgNode.rabiesPatients, orgName));
+                    aggregatedTB.push(...flatten(orgNode.tbPatients, orgName));
+                    aggregatedMarmat.push(...flatten(orgNode.marmatEntries, orgName));
+                    aggregatedDisposal.push(...flatten(orgNode.disposalEntries, orgName));
+                    aggregatedLog.push(...flatten(orgNode.logBook, orgName));
+                });
+
+                setStores(aggregatedStores);
+                setInventoryItems(aggregatedInventory);
+                setMagForms(aggregatedMagForms);
+                setHafaEntries(aggregatedHafa);
+                setPurchaseOrders(aggregatedPurchaseOrders);
+                setIssueReports(aggregatedIssueReports);
+                setStockEntryRequests(aggregatedStockRequests);
+                setDakhilaReports(aggregatedDakhila);
+                setReturnEntries(aggregatedReturns);
+                setFirms(aggregatedFirms);
+                setQuotations(aggregatedQuotations);
+                setRabiesPatients(aggregatedRabies);
+                setTbPatients(aggregatedTB);
+                setMarmatEntries(aggregatedMarmat);
+                setDhuliyaunaEntries(aggregatedDisposal);
+                setLogBookEntries(aggregatedLog);
+            }
+        });
+        unsubscribes.push(unsubGlobal);
+    } else {
+        // Normal scoped fetching for other roles
+        setupOrgListener('inventory', setInventoryItems);
+        setupOrgListener('stores', setStores);
+        setupOrgListener('magForms', setMagForms);
+        setupOrgListener('hafaEntries', setHafaEntries);
+        setupOrgListener('purchaseOrders', setPurchaseOrders);
+        setupOrgListener('issueReports', setIssueReports);
+        setupOrgListener('stockRequests', setStockEntryRequests);
+        setupOrgListener('dakhilaReports', setDakhilaReports);
+        setupOrgListener('returnEntries', setReturnEntries);
+        setupOrgListener('firms', setFirms);
+        setupOrgListener('quotations', setQuotations);
+        setupOrgListener('tbPatients', setTbPatients);
+        setupOrgListener('marmatEntries', setMarmatEntries);
+        setupOrgListener('disposalEntries', setDhuliyaunaEntries);
+        setupOrgListener('logBook', setLogBookEntries);
+        setupOrgListener('rabiesPatients', setRabiesPatients);
+    }
+
+    // Always fetch settings for current org to show in header/UI
     onValue(ref(db, `${orgPath}/settings`), (snap) => {
         if (snap.exists()) setGeneralSettings(snap.val());
         else {
@@ -120,23 +211,6 @@ const App: React.FC = () => {
             setGeneralSettings(firstSettings);
         }
     });
-
-    setupOrgListener('inventory', setInventoryItems);
-    setupOrgListener('stores', setStores);
-    setupOrgListener('magForms', setMagForms);
-    setupOrgListener('hafaEntries', setHafaEntries);
-    setupOrgListener('purchaseOrders', setPurchaseOrders);
-    setupOrgListener('issueReports', setIssueReports);
-    setupOrgListener('stockRequests', setStockEntryRequests);
-    setupOrgListener('dakhilaReports', setDakhilaReports);
-    setupOrgListener('returnEntries', setReturnEntries);
-    setupOrgListener('firms', setFirms);
-    setupOrgListener('quotations', setQuotations);
-    setupOrgListener('tbPatients', setTbPatients);
-    setupOrgListener('marmatEntries', setMarmatEntries);
-    setupOrgListener('disposalEntries', setDhuliyaunaEntries);
-    setupOrgListener('logBook', setLogBookEntries);
-    setupOrgListener('rabiesPatients', setRabiesPatients);
 
     return () => unsubscribes.forEach(unsub => unsub());
   }, [currentUser]);

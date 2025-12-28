@@ -275,6 +275,7 @@ export interface Store {
   contactPerson?: string;
   contactPhone?: string;
   fiscalYear: string; 
+  orgName?: string;
 }
 
 export interface InventoryItem {
