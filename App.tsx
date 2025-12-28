@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { LoginForm } from './components/LoginForm';
 import { Dashboard } from './components/Dashboard';
+import { PublicInfo } from './components/PublicInfo';
 import { APP_NAME, ORG_NAME } from './constants';
-import { ShieldCheck, Boxes } from 'lucide-react';
-import { User, OrganizationSettings, MagFormEntry, RabiesPatient, PurchaseOrderEntry, IssueReportEntry, FirmEntry, QuotationEntry, InventoryItem, Store, StockEntryRequest, DakhilaPratibedanEntry, ReturnEntry, MarmatEntry, DhuliyaunaEntry, LogBookEntry, DakhilaItem, TBPatient, HafaEntry, HafaItem } from './types';
+import { ShieldCheck, Boxes, Info, ArrowRight } from 'lucide-react';
+import { User, OrganizationSettings, MagFormEntry, RabiesPatient, PurchaseOrderEntry, IssueReportEntry, FirmEntry, QuotationEntry, InventoryItem, Store, StockEntryRequest, DakhilaPratibedanEntry, ReturnEntry, MarmatEntry, DhuliyaunaEntry, LogBookEntry, TBPatient, HafaEntry } from './types';
 import { db } from './firebase';
 import { ref, onValue, set, remove, update, get, Unsubscribe } from "firebase/database";
 // @ts-ignore
@@ -43,6 +44,7 @@ const STORAGE_KEY_USER = 'smart_inventory_active_user';
 const STORAGE_KEY_FY = 'smart_inventory_active_fy';
 
 const App: React.FC = () => {
+  const [showPublicInfo, setShowPublicInfo] = useState(false);
   const [allUsers, setAllUsers] = useState<User[]>([]); 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_USER);
@@ -157,6 +159,10 @@ const App: React.FC = () => {
       return ref(db, `orgData/${safeOrgName}/${subPath}`);
   };
 
+  if (showPublicInfo && !currentUser) {
+    return <PublicInfo onBack={() => setShowPublicInfo(false)} />;
+  }
+
   return (
     <>
       {currentUser ? (
@@ -205,7 +211,12 @@ const App: React.FC = () => {
                 </div>
                 <h1 className="text-3xl font-bold font-nepali tracking-tight">{APP_NAME}</h1>
                 <p className="text-[13px] font-nepali text-primary-50 mt-1.5 opacity-90">जिन्सी व्यवस्थापन अब तपाइँको हातमा</p>
-                <p className="text-primary-200 text-[10px] mt-3 uppercase font-bold tracking-[0.2em] opacity-60">Secure Login Portal</p>
+                <button 
+                  onClick={() => setShowPublicInfo(true)}
+                  className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 hover:bg-white/20 rounded-full text-[10px] font-bold transition-all border border-white/20"
+                >
+                  <Info size={12} /> प्रणालीको बारेमा जान्नुहोस् <ArrowRight size={10} />
+                </button>
               </div>
               <div className="p-8 md:p-10 bg-white">
                 <LoginForm 
