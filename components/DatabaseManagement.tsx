@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Database, Download, Upload, FileJson, FileSpreadsheet, ShieldCheck, HardDrive, FileText, Users, ShoppingCart, Archive, Syringe, FileUp, AlertCircle, CheckCircle2, FolderUp, Info, Trash2, AlertTriangle, Lock, Store as StoreIcon, Table as TableIcon, Loader2, Sparkles, OctagonAlert } from 'lucide-react';
-import { User, InventoryItem, MagFormEntry, PurchaseOrderEntry, IssueReportEntry, RabiesPatient, FirmEntry, Store } from '../types';
+import { User, InventoryItem, MagFormEntry, PurchaseOrderEntry, IssueReportEntry, RabiesPatient, FirmEntry, Store, Option } from '../types';
 import { Select } from './Select';
 
 interface DatabaseManagementProps {
@@ -35,6 +35,33 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+
+  const dataSections = useMemo(() => [
+    { id: 'users', title: 'प्रयोगकर्ताहरू (Users)', data: users, icon: <Users size={24} className="text-blue-600" />, desc: 'प्रणाली प्रयोगकर्ता र लगइन विवरण', color: 'bg-blue-50 border-blue-200' },
+    { id: 'inventory', title: 'जिन्सी मौज्दात (Inventory)', data: inventoryItems, icon: <Database size={24} className="text-purple-600" />, desc: 'हालको जिन्सी सामानहरूको सूची', color: 'bg-purple-50 border-purple-200' },
+    { id: 'mag_forms', title: 'माग फारमहरू (Mag Forms)', data: magForms, icon: <FileText size={24} className="text-orange-600" />, desc: 'सबै माग फारमहरूको विवरण', color: 'bg-orange-50 border-orange-200' },
+    { id: 'purchase_orders', title: 'खरिद आदेश (Purchase Orders)', data: purchaseOrders, icon: <ShoppingCart size={24} className="text-green-600" />, desc: 'जारी गरिएका खरिद आदेशहरू', color: 'bg-green-50 border-green-200' },
+    { id: 'issue_reports', title: 'निकासा प्रतिवेदन (Issue Reports)', data: issueReports, icon: <Archive size={24} className="text-teal-600" />, desc: 'सामान निकासा र खर्च विवरण', color: 'bg-teal-50 border-teal-200' },
+    { id: 'rabies', title: 'रेबिज़ बिरामी (Rabies Patients)', data: rabiesPatients, icon: <Syringe size={24} className="text-red-600" />, desc: 'रेबिज़ खोप र बिरामीको रेकर्ड', color: 'bg-red-50 border-red-200' },
+    { id: 'firms', title: 'दर्ता फर्महरू (Firms)', data: firms, icon: <ShieldCheck size={24} className="text-indigo-600" />, desc: 'सुचीकृत फर्म/सप्लायर्स', color: 'bg-indigo-50 border-indigo-200' },
+    { id: 'stores', title: 'स्टोरहरू (Stores)', data: stores, icon: <HardDrive size={24} className="text-slate-600" />, desc: 'विभिन्न स्टोरहरूको विवरण', color: 'bg-slate-100 border-slate-200' }
+  ], [users, inventoryItems, magForms, purchaseOrders, issueReports, rabiesPatients, firms, stores]);
+
+  const storeOptions: Option[] = useMemo(() => {
+    return stores.map(s => ({
+      id: s.id,
+      value: s.id,
+      label: `${s.name} (${s.address || 'No Address'})`
+    }));
+  }, [stores]);
+
+  const uploadOptions = useMemo(() => {
+    return dataSections.map(section => ({
+      id: section.id,
+      value: section.id,
+      label: section.title
+    }));
+  }, [dataSections]);
 
   if (currentUser.role !== 'SUPER_ADMIN') {
     return (
@@ -105,7 +132,6 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
     setIsUploading(true);
     setTimeout(() => {
       setIsUploading(false);
-      const targetLabel = dataSections.find(s => s.id === uploadTarget)?.title || uploadTarget;
       setUploadSuccess(`फाइल सफलतापूर्वक अपलोड भयो!`);
       setSelectedFile(null);
       setSelectedStoreForUpload('');
@@ -118,17 +144,6 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
     }
   };
 
-  const dataSections = [
-    { id: 'users', title: 'प्रयोगकर्ताहरू (Users)', data: users, icon: <Users size={24} className="text-blue-600" />, desc: 'प्रणाली प्रयोगकर्ता र लगइन विवरण', color: 'bg-blue-50 border-blue-200' },
-    { id: 'inventory', title: 'जिन्सी मौज्दात (Inventory)', data: inventoryItems, icon: <Database size={24} className="text-purple-600" />, desc: 'हालको जिन्सी सामानहरूको सूची', color: 'bg-purple-50 border-purple-200' },
-    { id: 'mag_forms', title: 'माग फारमहरू (Mag Forms)', data: magForms, icon: <FileText size={24} className="text-orange-600" />, desc: 'सबै माग फारमहरूको विवरण', color: 'bg-orange-50 border-orange-200' },
-    { id: 'purchase_orders', title: 'खरिद आदेश (Purchase Orders)', data: purchaseOrders, icon: <ShoppingCart size={24} className="text-green-600" />, desc: 'जारी गरिएका खरिद आदेशहरू', color: 'bg-green-50 border-green-200' },
-    { id: 'issue_reports', title: 'निकासा प्रतिवेदन (Issue Reports)', data: issueReports, icon: <Archive size={24} className="text-teal-600" />, desc: 'सामान निकासा र खर्च विवरण', color: 'bg-teal-50 border-teal-200' },
-    { id: 'rabies', title: 'रेबिज़ बिरामी (Rabies Patients)', data: rabiesPatients, icon: <Syringe size={24} className="text-red-600" />, desc: 'रेबिज़ खोप र बिरामीको रेकर्ड', color: 'bg-red-50 border-red-200' },
-    { id: 'firms', title: 'दर्ता फर्महरू (Firms)', data: firms, icon: <ShieldCheck size={24} className="text-indigo-600" />, desc: 'सुचीकृत फर्म/सप्लायर्स', color: 'bg-indigo-50 border-indigo-200' },
-    { id: 'stores', title: 'स्टोरहरू (Stores)', data: stores, icon: <HardDrive size={24} className="text-slate-600" />, desc: 'विभिन्न स्टोरहरूको विवरण', color: 'bg-slate-100 border-slate-200' }
-  ];
-
   const fileFormatSpecs: Record<string, string> = {
     users: "username, password, role, fullName, designation, phoneNumber, organizationName",
     mag_forms: "fiscalYear, formNo, date, status",
@@ -136,11 +151,9 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
     issue_reports: "magFormNo, issueDate, status, demandBy",
     rabies: "regNo, name, age, sex, address, phone, regimen",
     firms: "firmName, vatPan, address, contactNo",
-    stores: "name, address, contactPerson, contactPhone"
+    stores: "name, address, contactPerson, contactPhone",
+    inventory: "itemName, itemType, unit, currentQuantity, rate, batchNo, expiryDateAd, uniqueCode, sanketNo"
   };
-
-  const storeOptions = stores.map(s => ({ id: s.id, value: s.id, label: s.name }));
-  const uploadOptions = dataSections.map(section => ({ id: section.id, value: section.id, label: section.title }));
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
@@ -180,7 +193,7 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                       <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">{section.icon}</div>
                       <div>
                         <h4 className="font-bold text-slate-800 font-nepali text-sm">{section.title}</h4>
-                        <span className="text-[10px] font-bold px-2 py-0.5 bg-white rounded-full border border-slate-200 text-slate-50">{section.data.length} Rows</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 bg-white rounded-full border border-slate-200 text-slate-500">{section.data.length} Rows</span>
                       </div>
                     </div>
                   </div>
@@ -202,7 +215,7 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                 <Upload className="text-green-600 mt-1" size={20} />
                 <div>
                   <h4 className="font-bold text-green-800 font-nepali text-sm">डाटा अपलोड गर्नुहोस्</h4>
-                  <p className="text-sm text-green-700 mt-1">Excel (.xlsx) वा CSV फाइल मार्फत डाटाहरू अपलोड गर्नुहोस्।</p>
+                  <p className="text-sm text-green-700 mt-1">एक्सेल फाइल मार्फत डाटाहरू प्रणालीमा प्रविष्ट गर्नुहोस्।</p>
                 </div>
               </div>
 
@@ -212,20 +225,37 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                     label="१. डाटाको प्रकार छान्नुहोस् (Select Data Type)"
                     options={uploadOptions}
                     value={uploadTarget}
-                    onChange={(e) => { setUploadTarget(e.target.value); if(e.target.value !== 'inventory') setSelectedStoreForUpload(''); }}
+                    onChange={(e) => { 
+                      setUploadTarget(e.target.value); 
+                      if(e.target.value !== 'inventory') setSelectedStoreForUpload(''); 
+                    }}
                     placeholder="-- छान्नुहोस् --"
                   />
 
                   {uploadTarget === 'inventory' && (
-                    <div className="animate-in slide-in-from-top-2">
-                      <Select 
-                        label="२. लक्ष्य स्टोर छान्नुहोस् (Select Target Store) *"
-                        options={storeOptions}
-                        value={selectedStoreForUpload}
-                        onChange={(e) => setSelectedStoreForUpload(e.target.value)}
-                        placeholder="-- स्टोर छान्नुहोस् --"
-                        icon={<StoreIcon size={16} />}
-                      />
+                    <div className="animate-in slide-in-from-top-2 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-bold text-slate-700 font-nepali">२. लक्ष्य स्टोर छान्नुहोस् (Target Store) *</label>
+                        {stores.length === 0 && (
+                          <span className="text-[10px] text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded border border-red-100">नो स्टोर भेटियो!</span>
+                        )}
+                      </div>
+                      
+                      {stores.length > 0 ? (
+                        <Select 
+                          label=""
+                          options={storeOptions}
+                          value={selectedStoreForUpload}
+                          onChange={(e) => setSelectedStoreForUpload(e.target.value)}
+                          placeholder="-- स्टोर छान्नुहोस् --"
+                          icon={<StoreIcon size={16} />}
+                        />
+                      ) : (
+                        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg flex items-center gap-3 text-orange-800">
+                          <AlertTriangle size={20} />
+                          <p className="text-xs font-bold font-nepali">प्रणालीमा कुनै स्टोर भेटिएन। कृपया पहिले 'स्टोर सेटअप' मेनुमा गएर एउटा स्टोर बनाउनुहोस्।</p>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -234,122 +264,34 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                       <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
                         <div className="flex items-center gap-2 text-indigo-700">
                           <TableIcon size={20} />
-                          <h4 className="font-bold font-nepali">३. फाइलको कोलम र ढाँचा (Excel/CSV Column Format)</h4>
-                        </div>
-                        <div className="flex items-center gap-1.5 bg-red-50 text-red-600 px-3 py-1 rounded-full border border-red-100">
-                            <OctagonAlert size={14} />
-                            <span className="text-[10px] font-black uppercase tracking-widest">हेडर अनिवार्य (Header Required)</span>
+                          <h4 className="font-bold font-nepali text-sm">३. फाइलको कोलम विवरण (Headers)</h4>
                         </div>
                       </div>
                       
-                      {uploadTarget === 'inventory' ? (
-                        <div className="space-y-6">
-                          <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r-xl flex items-start gap-3">
-                              <Info size={18} className="text-orange-600 mt-0.5 shrink-0" />
-                              <p className="text-xs text-orange-800 font-medium font-nepali leading-relaxed">
-                                <strong>सावधानी:</strong> फाइलको पहिलो लहर (Row 1) मा कोलमका नामहरू (Headers) **ठ्याक्कै** तल दिइएको नमूना जस्तै हुनुपर्छ। स्पेलिङ वा केस (Case) नमिल्दा डाटा अपलोड नहुन सक्छ।
-                              </p>
+                      <div className="bg-blue-50 border border-blue-200 text-blue-800 px-5 py-4 rounded-xl text-xs flex items-start gap-3">
+                        <Info size={18} className="mt-0.5 shrink-0" />
+                        <div className="flex-1">
+                          <span className="font-bold block mb-2 text-sm">कोलमको नामहरू (Headers):</span>
+                          <div className="font-mono bg-white p-3 rounded-lg border border-blue-200 break-all leading-relaxed shadow-inner">
+                            {fileFormatSpecs[uploadTarget]}
                           </div>
-
-                          {/* SPREADSHEET STYLE PREVIEW */}
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg w-fit">
-                                <Sparkles size={14} className="text-blue-600" />
-                                <span className="text-xs font-bold text-blue-800 font-nepali">नमूना एक्सेल कोलमहरू (Sample Column Header Preview)</span>
-                            </div>
-                            
-                            <div className="overflow-x-auto border border-slate-300 rounded-xl shadow-sm">
-                              <table className="w-full text-[11px] text-center border-collapse">
-                                <thead className="bg-slate-100 text-slate-800 font-black border-b border-slate-300">
-                                  <tr>
-                                    <th className="px-4 py-3 border-r border-slate-300 bg-slate-200">itemName</th>
-                                    <th className="px-4 py-3 border-r border-slate-300">itemType</th>
-                                    <th className="px-4 py-3 border-r border-slate-300">unit</th>
-                                    <th className="px-4 py-3 border-r border-slate-300">currentQuantity</th>
-                                    <th className="px-4 py-3 border-r border-slate-300">rate</th>
-                                    <th className="px-4 py-3 border-r border-slate-300 bg-orange-100 text-orange-800">batchNo</th>
-                                    <th className="px-4 py-3 border-r border-slate-300 bg-orange-100 text-orange-800">expiryDateAd</th>
-                                    <th className="px-4 py-3 border-r border-slate-300">uniqueCode</th>
-                                    <th className="px-4 py-3">sanketNo</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="bg-white font-mono text-slate-600">
-                                  {/* Row for standard items */}
-                                  <tr className="border-b border-slate-200 hover:bg-slate-50 transition-colors">
-                                    <td className="px-4 py-3 border-r border-slate-300 font-bold text-slate-800">Table (अन्या सामान)</td>
-                                    <td className="px-4 py-3 border-r border-slate-300">Non-Expendable</td>
-                                    <td className="px-4 py-3 border-r border-slate-300">Pcs</td>
-                                    <td className="px-4 py-3 border-r border-slate-300">10</td>
-                                    <td className="px-4 py-3 border-r border-slate-300">5000</td>
-                                    <td className="px-4 py-3 border-r border-slate-300 italic text-slate-300">- (खाली)</td>
-                                    <td className="px-4 py-3 border-r border-slate-300 italic text-slate-300">- (खाली)</td>
-                                    <td className="px-4 py-3 border-r border-slate-300">UC-101</td>
-                                    <td className="px-4 py-3">S-01</td>
-                                  </tr>
-                                  {/* Row for expiry items */}
-                                  <tr className="bg-orange-50/20 hover:bg-orange-50/40 transition-colors">
-                                    <td className="px-4 py-3 border-r border-slate-300 font-bold text-orange-900">Paracetamol (म्याद हुने)</td>
-                                    <td className="px-4 py-3 border-r border-slate-300">Expendable</td>
-                                    <td className="px-4 py-3 border-r border-slate-300">Tabs</td>
-                                    <td className="px-4 py-3 border-r border-slate-300">500</td>
-                                    <td className="px-4 py-3 border-r border-slate-300">2.50</td>
-                                    <td className="px-4 py-3 border-r border-slate-300 font-bold text-orange-700">B-902</td>
-                                    <td className="px-4 py-3 border-r border-slate-300 font-bold text-orange-700">2026-12-31</td>
-                                    <td className="px-4 py-3 border-r border-slate-300">UC-202</td>
-                                    <td className="px-4 py-3">S-02</td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-                            
-                            <div className="flex flex-wrap gap-4 text-[10px] bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-white border border-slate-300"></div><span className="font-bold text-slate-600">अन्या सामान (Other Items):</span> Expiry र Batch खाली छोड्नुहोस्।</div>
-                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-orange-100 border border-orange-200"></div><span className="font-bold text-orange-700">म्याद हुने सामान (Expiry Items):</span> Expiry र Batch अनिवार्य भर्नुहोस्।</div>
-                            </div>
-                          </div>
-
-                          <div className="rounded-xl border border-indigo-100 overflow-hidden">
-                              <table className="w-full text-[11px] text-left">
-                                  <thead className="bg-indigo-600 text-white font-bold">
-                                      <tr>
-                                          <th className="px-4 py-2 w-1/4">कोलम नाम (Header)</th>
-                                          <th className="px-4 py-2">विवरण (Description)</th>
-                                      </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-indigo-50">
-                                      <tr><td className="px-4 py-2 font-mono font-bold text-indigo-700">itemName</td><td className="px-4 py-2">सामानको नाम (Name of the item)</td></tr>
-                                      <tr><td className="px-4 py-2 font-mono font-bold text-indigo-700">itemType</td><td className="px-4 py-2">Expendable वा Non-Expendable</td></tr>
-                                      <tr><td className="px-4 py-2 font-mono font-bold text-indigo-700">currentQuantity</td><td className="px-4 py-2">संख्या/परिमाण (Number only)</td></tr>
-                                      <tr className="bg-orange-50"><td className="px-4 py-2 font-mono font-bold text-orange-700">batchNo</td><td className="px-4 py-2 font-bold italic text-orange-800">म्याद हुने सामानको लागि मात्र (Batch number)</td></tr>
-                                      <tr className="bg-orange-50"><td className="px-4 py-2 font-mono font-bold text-orange-700">expiryDateAd</td><td className="px-4 py-2 font-bold italic text-orange-800">मिति ढाँचा: YYYY-MM-DD (जस्तै: 2026-10-25)</td></tr>
-                                  </tbody>
-                              </table>
-                          </div>
+                          <p className="mt-3 text-[10px] text-blue-600 font-bold italic">* फाइलमा पहिलो लहर (Row 1) मा यी नामहरू ठ्याक्कै हुनुपर्छ।</p>
                         </div>
-                      ) : (
-                        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-5 py-4 rounded-xl text-xs flex items-start gap-3">
-                          <Info size={18} className="mt-0.5 shrink-0" />
-                          <div className="flex-1">
-                            <span className="font-bold block mb-2 text-sm">कोलमको नामहरू (Exact Headers):</span>
-                            <div className="font-mono bg-white p-3 rounded-lg border border-blue-200 break-all leading-relaxed shadow-inner">
-                              {fileFormatSpecs[uploadTarget]}
-                            </div>
-                            <p className="mt-3 text-[10px] text-blue-600 font-bold italic">* फाइलमा पहिलो लहर (Header Row) मा यी नामहरू ठ्याक्कै मिल्नुपर्नेछ।</p>
-                          </div>
-                        </div>
-                      )}
+                      </div>
                     </div>
                   )}
 
                   <div className="space-y-3">
-                    <label className="text-sm font-black text-slate-700 font-nepali">४. फाइल छान्नुहोस् (Choose Excel/CSV File)</label>
-                    <div className="border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center hover:bg-slate-50 transition-all relative group cursor-pointer bg-slate-50/50 hover:border-green-400">
+                    <label className="text-sm font-black text-slate-700 font-nepali">४. फाइल छान्नुहोस् (Choose File)</label>
+                    <div className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all relative group cursor-pointer ${selectedFile ? 'border-green-400 bg-green-50/20' : 'border-slate-300 bg-slate-50/50 hover:bg-slate-50 hover:border-primary-400'}`}>
                       <input type="file" accept=".csv, .xlsx, .xls" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
                       <div className="flex flex-col items-center gap-4 pointer-events-none group-hover:scale-105 transition-transform duration-300">
-                        <div className="p-4 bg-white rounded-2xl shadow-md border border-slate-100"><FileUp size={40} className="text-slate-400 group-hover:text-green-600 transition-colors" /></div>
+                        <div className={`p-4 bg-white rounded-2xl shadow-md border ${selectedFile ? 'text-green-600 border-green-200' : 'text-slate-400 border-slate-100'}`}>
+                          <FileUp size={40} />
+                        </div>
                         <div>
-                          <p className="text-base font-bold text-slate-700">{selectedFile ? selectedFile.name : 'यहाँ क्लिक गर्नुहोस् वा फाइल तान्नुहोस्'}</p>
-                          <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest">{selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : 'Excel (.xlsx) or CSV (.csv) ONLY'}</p>
+                          <p className="text-base font-bold text-slate-700">{selectedFile ? selectedFile.name : 'एक्सेल वा CSV फाइल यहाँ तान्नुहोस्'}</p>
+                          <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest">{selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : 'Only .xlsx or .csv'}</p>
                         </div>
                       </div>
                     </div>
@@ -358,10 +300,10 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                   <button 
                     onClick={handleUpload}
                     disabled={!selectedFile || !uploadTarget || (uploadTarget === 'inventory' && !selectedStoreForUpload) || isUploading}
-                    className={`w-full py-4 rounded-xl font-black shadow-lg transition-all flex items-center justify-center gap-3 text-base ${(!selectedFile || !uploadTarget || (uploadTarget === 'inventory' && !selectedStoreForUpload) || isUploading) ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700 hover:shadow-green-200 active:scale-95'}`}
+                    className={`w-full py-4 rounded-xl font-black shadow-lg transition-all flex items-center justify-center gap-3 text-base ${(!selectedFile || !uploadTarget || (uploadTarget === 'inventory' && !selectedStoreForUpload) || isUploading) ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' : 'bg-green-600 text-white hover:bg-green-700 hover:shadow-green-200 active:scale-95'}`}
                   >
                     {isUploading ? <Loader2 size={24} className="animate-spin" /> : <FolderUp size={24}/>}
-                    {isUploading ? 'डाटा सुरक्षित हुँदैछ...' : 'डाटाबेसमा अपलोड गर्नुहोस्'}
+                    {isUploading ? 'डाटा सुरक्षित हुँदैछ...' : 'अपलोड गर्नुहोस्'}
                   </button>
                 </div>
                 {uploadSuccess && <div className="p-4 bg-green-50 border border-green-200 text-green-800 rounded-xl flex items-center gap-4 animate-in slide-in-from-top-2"><CheckCircle2 size={24} className="text-green-600" /><span className="font-bold text-sm">{uploadSuccess}</span></div>}
@@ -376,7 +318,7 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
               <AlertTriangle className="text-red-600 mt-1" size={24} />
               <div>
                 <h4 className="font-black text-red-800 font-nepali text-base">खतरनाक क्षेत्र (Danger Zone)</h4>
-                <p className="text-sm text-red-700 mt-1">डाटा मेटाउनु अघि ब्याकअप डाउनलोड गर्न दृढताका साथ सुझाव दिइन्छ। मेटिएको डाटा फिर्ता ल्याउन सकिँदैन।</p>
+                <p className="text-sm text-red-700 mt-1">डाटा मेटाउनु अघि ब्याकअप डाउनलोड गर्न सुझाव दिइन्छ। मेटिएको डाटा फिर्ता ल्याउन सकिँदैन।</p>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -392,7 +334,7 @@ export const DatabaseManagement: React.FC<DatabaseManagementProps> = ({
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => handleDelete(section.id, section.title)} disabled={section.data.length === 0} className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg text-xs font-black transition-all relative z-10 ${section.data.length === 0 ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : 'bg-white text-red-600 border-2 border-red-100 hover:bg-red-50 hover:border-red-200'}`}><Trash2 size={16} /> Delete All Records</button>
+                  <button onClick={() => handleDelete(section.id, section.title)} disabled={section.data.length === 0} className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg text-xs font-black transition-all relative z-10 ${section.data.length === 0 ? 'bg-slate-50 text-slate-300 cursor-not-allowed border-slate-200' : 'bg-white text-red-600 border-2 border-red-100 hover:bg-red-50 hover:border-red-200'}`}><Trash2 size={16} /> Delete All Records</button>
                 </div>
               ))}
             </div>
