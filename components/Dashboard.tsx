@@ -284,7 +284,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const allowedMenus = currentUser.allowedMenus || [];
     const allItems = [
         { id: 'dashboard', label: 'ड्यासबोर्ड (Dashboard)', icon: <LayoutDashboard size={20} /> },
-        { id: 'services', label: 'सेवा (Services)', icon: <Stethoscope size={20} />, subItems: [{ id: 'tb_leprosy', label: 'क्षयरोग (TB)', icon: <Activity size={16} /> }, { id: 'rabies', label: 'रेबिज खोप (Rabies)', icon: <Syringe size={16} /> }] },
+        { id: 'services', label: 'सेवा (Services)', icon: <Stethoscope size={20} />, subItems: [{ id: 'tb_leprosy', label: 'क्षयरोग (TB)', icon: <Activity size={16} /> }, { id: 'rabies', label: 'रेबिज़ खोप (Rabies)', icon: <Syringe size={16} /> }] },
         { id: 'inventory', label: 'जिन्सी (Inventory)', icon: <Package size={20} />, count: inventoryTotalNotifications, subItems: [ 
             { id: 'stock_entry_approval', label: 'स्टक प्रविष्टि', icon: <ClipboardCheck size={16} />, count: pendingDakhilaCount }, 
             { id: 'jinshi_maujdat', label: 'जिन्सी मौज्दात', icon: <Warehouse size={16} /> }, 
@@ -434,7 +434,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <p className="text-[10px] text-slate-400 font-nepali truncate">{currentUser.organizationName}</p>
           </div>
         </div>
-        <nav className="flex-1 p-3 space-y-1 custom-scrollbar">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto custom-scrollbar">
              {menuItems.map((item: any) => (
                <div key={item.id}>
                   <button onClick={() => handleMenuClick(item)} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${activeItem === item.id || (item.subItems && item.subItems.some((s: any) => s.id === activeItem)) ? 'bg-primary-600/10 text-primary-400' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
@@ -473,12 +473,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </nav>
         <div className="p-4 border-t border-slate-800 bg-slate-950 shrink-0"><button onClick={onLogout} className="flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 w-full rounded-xl transition-all font-bold font-nepali text-sm"><LogOut size={18} /> लगआउट</button></div>
       </aside>
-      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
+      <div className="flex-1 flex flex-col h-full min-w-0 min-h-0 overflow-hidden relative">
         <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-4 md:px-8 shadow-sm z-50 shrink-0 no-print">
             <div className="flex items-center gap-3"><button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"><Menu size={20} /></button><div className="hidden md:flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-100 text-xs font-bold uppercase tracking-wider"><Calendar size={12} /> {fiscalYearLabel}</div><h2 className="font-bold text-slate-700 font-nepali truncate max-w-[150px] sm:max-w-none">{activeItem === 'dashboard' ? 'ड्यासबोर्ड' : 'कार्य क्षेत्र'}</h2></div>
             <div className="flex items-center gap-3"><button onClick={handleNotificationClick} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 relative"><Bell size={20} />{latestApprovedDakhila && latestApprovedDakhila.id !== lastSeenNotificationId && <span className="absolute top-2 right-2.5 h-2 w-2 bg-red-500 rounded-full border-2 border-white"></span>}</button><div className="flex items-center gap-2 pl-2 border-l border-slate-200"><div className="text-right hidden sm:block"><p className="text-xs font-bold text-slate-800">{currentUser.username}</p><p className="text-[10px] text-slate-500 uppercase">{currentUser.role}</p></div><div className="w-8 h-8 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center font-bold text-xs shadow-sm uppercase">{currentUser.username.charAt(0)}</div></div></div>
         </header>
-        <main className="flex-1 custom-scrollbar bg-slate-50/30 p-4 md:p-6 print:p-0 print:bg-white print:overflow-visible"><div className="max-w-7xl mx-auto pb-20 print:pb-0">{renderContent()}</div></main>
+        <main className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/30 p-4 md:p-6 print:p-0 print:bg-white print:overflow-visible">
+            <div className="max-w-7xl mx-auto pb-20 print:pb-0">{renderContent()}</div>
+        </main>
       </div>
 
       {/* --- VACCINE FORECAST MODAL --- */}
