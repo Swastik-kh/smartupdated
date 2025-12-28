@@ -67,7 +67,7 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'today'>('all');
   const [filterOrg, setFilterOrg] = useState<string>('all'); 
-  const [showAllYears, setShowAllYears] = useState(true); 
+  const [showAllYears, setSelectedAllYears] = useState(true); 
   const [modalDateBs, setModalDateBs] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -166,26 +166,19 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
     }
   }, [patients.length, editingPatientId]);
 
-  /**
-   * Refined calculateSchedule to avoid timezone drift.
-   * Ensures that if D0 is 6th, D3 is strictly 9th and D7 is strictly 13th.
-   */
   const calculateSchedule = (startDateAd: string, regimen: string): VaccinationDose[] => {
       if (!startDateAd) return [];
-      
-      // Parse YYYY-MM-DD manually to avoid UTC conversion shifts
       const parts = startDateAd.split('-');
       if (parts.length !== 3) return [];
       
       const year = parseInt(parts[0]);
-      const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
+      const month = parseInt(parts[1]) - 1; 
       const day = parseInt(parts[2]);
 
       const schedule: VaccinationDose[] = [];
       const days = regimen === 'Intradermal' ? [0, 3, 7] : [0, 3, 7, 14, 28];
       
       days.forEach(dayOffset => {
-          // Use local date object for arithmetic
           const doseDate = new Date(year, month, day);
           doseDate.setDate(doseDate.getDate() + dayOffset);
           
@@ -264,7 +257,6 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
               const originalPatient = patients.find(p => p.id === editingPatientId);
               let finalSchedule = originalPatient?.schedule || [];
               
-              // If regimen or D0 date changed, recalculate the entire schedule
               if (originalPatient?.regimen !== formData.regimen || originalPatient?.regDateAd !== formData.regDateAd) {
                   finalSchedule = calculateSchedule(formData.regDateAd, formData.regimen);
               }
@@ -299,6 +291,22 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Anchor follow-ups to the actual D0 date for a better user experience
+  const d0ActualDateAd = useMemo(() => {
+    if (!selectedDoseInfo) return '';
+    const d0 = selectedDoseInfo.patient.schedule?.find(d => d.day === 0);
+    return d0?.givenDate || selectedDoseInfo.patient.regDateAd;
+  }, [selectedDoseInfo]);
+
+  const d0ActualDateBs = useMemo(() => {
+    if (!d0ActualDateAd) return '';
+    try {
+        const parts = d0ActualDateAd.split('-');
+        const adDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        return new NepaliDate(adDate).format('YYYY-MM-DD');
+    } catch (e) { return ''; }
+  }, [d0ActualDateAd]);
+
   const confirmDoseUpdate = async () => {
       if (!selectedDoseInfo) return;
       if (!modalDateBs) { alert("कृपया खोप लगाएको मिति छान्नुहोस्"); return; }
@@ -318,19 +326,31 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
           return;
       }
 
-      // Business Rule: D3/D7 cannot be before D0
-      if (dose.day !== 0 && givenDateAd < dose.date) {
-          alert(`त्रुटि: खोप लगाएको मिति निर्धारित मिति (${dose.date}) भन्दा अगाडि हुन सक्दैन।`);
+      // --- CRITICAL CHANGE: Stricter validation for non-D0 doses ---
+      // For non-D0 doses, the given date cannot be before the *scheduled date* of that specific dose.
+      // For D0, the given date cannot be before Day 0's initial scheduled date.
+      if (givenDateAd < dose.date) { // This now correctly uses the specific dose's scheduled date
+          alert(`त्रुटि: खोप लगाएको मिति निर्धारित मिति (${scheduledDateBs}) भन्दा अगाडि हुन सक्दैन।`);
           return;
       }
 
       if (dose.day === 0) {
-          // IF D0 is changed, recalculate all subsequent target dates
           const newSchedule = calculateSchedule(givenDateAd, patient.regimen);
           newSchedule[0].status = 'Given';
           newSchedule[0].givenDate = givenDateAd;
-          await onUpdatePatient({ ...patient, regDateAd: givenDateAd, schedule: newSchedule });
-          alert("Day 0 मिति परिवर्तन भएकोले अन्य डोजहरूको तालिका स्वतः अपडेट गरिएको छ।");
+
+          const nd = new NepaliDate(new Date(givenDateAd));
+          const newRegDateBs = nd.format('YYYY-MM-DD');
+          const newRegMonth = String(nd.getMonth() + 1).padStart(2, '0');
+
+          await onUpdatePatient({ 
+              ...patient, 
+              regDateAd: givenDateAd, 
+              regDateBs: newRegDateBs,
+              regMonth: newRegMonth,
+              schedule: newSchedule 
+          });
+          alert("Day 0 मिति परिवर्तन भएकोले अन्य डोजहरूको (D3, D7) तालिका स्वतः अपडेट गरिएको छ।");
       } else {
           const updatedSchedule = [...(patient.schedule || [])];
           updatedSchedule[doseIndex] = {
@@ -497,7 +517,7 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
                        </div>
                    )}
 
-                   <button onClick={() => setShowAllYears(!showAllYears)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all no-print ${showAllYears ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}><Globe size={14} /> {showAllYears ? 'सबै वर्ष' : 'यो वर्ष'}</button>
+                   <button onClick={() => setSelectedAllYears(!showAllYears)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all no-print ${showAllYears ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}><Globe size={14} /> {showAllYears ? 'सबै वर्ष' : 'यो वर्ष'}</button>
                 </div>
               </div>
               
@@ -586,7 +606,7 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
                           <h4 className="text-xl font-black text-slate-800">{selectedDoseInfo.patient.name}</h4>
                           <div className="flex justify-center gap-2 mt-3">
                             <span className="text-[10px] font-bold bg-slate-100 px-3 py-1 rounded-full text-slate-600 uppercase">Day {selectedDoseInfo.dose.day}</span>
-                            <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full">{selectedDoseInfo.dose.date}</span>
+                            <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full">{scheduledDateBs}</span>
                           </div>
                       </div>
                       
@@ -601,7 +621,7 @@ export const RabiesRegistration: React.FC<RabiesRegistrationProps> = ({
                           {selectedDoseInfo.dose.day === 0 ? (
                             <div className="bg-orange-50 p-3 rounded-lg flex items-start gap-2 border border-orange-100">
                                 <Info size={14} className="text-orange-600 mt-0.5" />
-                                <p className="text-[10px] text-orange-700 font-medium">Day 0 को मिति परिवर्तन गर्दा पछिल्ला डोजहरूको तालिका स्वतः परिमार्जन हुनेछ।</p>
+                                <p className="text-[10px] text-orange-700 font-medium">Day 0 को मिति परिवर्तन गर्दा पछिल्ला डोजहरूको (D3, D7) तालिका स्वतः परिमार्जन हुनेछ।</p>
                             </div>
                           ) : (
                             <div className="bg-blue-50 p-3 rounded-lg flex items-start gap-2 border border-blue-100">

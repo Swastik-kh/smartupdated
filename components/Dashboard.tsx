@@ -178,10 +178,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     
     const todayRabiesReg = rabiesPatients.filter(p => p.regDateBs === todayStr).length;
     
-    let scheduledToday = 0;
-    let visitedToday = 0;
-    let totalOverdueCount = 0;
-    let pendingRabiesDosesCount = 0;
+    let dosesScheduledForToday = 0; // Count of doses scheduled for today and still pending
+    let dosesGivenToday = 0;        // Count of doses actually given today
+    let dosesOverdue = 0;           // Count of doses that are overdue and pending
+    let pendingRabiesDosesCount = 0; // Total pending doses regardless of date (for forecast)
+
     const patientsForToday: Array<{patient: RabiesPatient, doseDay: number, status: string, scheduledDate: string, isOverdue: boolean}> = [];
     const completedPatients: RabiesPatient[] = [];
 
@@ -193,14 +194,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         schedule.forEach(dose => {
             if (dose.status === 'Pending') pendingRabiesDosesCount++;
 
-            const isScheduledToday = dose.date === todayAdStr;
-            const isOverdue = dose.date < todayAdStr && dose.status === 'Pending';
+            const isScheduledForTodayAndPending = dose.date === todayAdStr && dose.status === 'Pending';
+            const isOverdueAndPending = dose.date < todayAdStr && dose.status === 'Pending';
             const isGivenToday = dose.status === 'Given' && (dose.givenDate === todayAdStr);
-            if (isScheduledToday) { scheduledToday++; }
-            if (isOverdue) { totalOverdueCount++; }
-            if (isScheduledToday || isGivenToday || isOverdue) {
-                if (isGivenToday) { visitedToday++; }
-                patientsForToday.push({ patient, doseDay: dose.day, status: dose.status, scheduledDate: dose.date, isOverdue: isOverdue });
+
+            if (isScheduledForTodayAndPending) { dosesScheduledForToday++; }
+            if (isGivenToday) { dosesGivenToday++; }
+            if (isOverdueAndPending) { dosesOverdue++; }
+
+            if (isScheduledForTodayAndPending || isGivenToday || isOverdueAndPending) {
+                patientsForToday.push({ patient, doseDay: dose.day, status: dose.status, scheduledDate: dose.date, isOverdue: isOverdueAndPending });
             }
         });
     });
@@ -208,7 +211,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     patientsForToday.sort((a, b) => {
         if (a.isOverdue && !b.isOverdue) return -1;
         if (!a.isOverdue && b.isOverdue) return 1;
-        return a.scheduledDate.localeCompare(a.scheduledDate);
+        return a.scheduledDate.localeCompare(b.scheduledDate);
     });
 
     const myOrgInventory = inventoryItems.filter(item => currentUser.role === 'SUPER_ADMIN' || !item.orgName || item.orgName === currentUser.organizationName);
@@ -245,9 +248,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     
     return { 
         todayRabiesReg, 
-        scheduledToday, 
-        visitedToday, 
-        totalOverdueCount, 
+        dosesScheduledForToday, 
+        dosesGivenToday, 
+        dosesOverdue, 
         patientsForToday, 
         completedPatients, 
         expiringSoonItems, 
@@ -367,8 +370,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
                 <div onClick={() => setShowAttendanceModal(true)} className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md transition-all group cursor-pointer active:scale-95">
                     <div className="flex justify-between items-start">
-                        <div><div className="flex items-baseline gap-1"><h3 className="text-2xl font-black text-emerald-600">{stats.visitedToday}</h3><span className="text-slate-400 font-bold text-sm">/ {stats.scheduledToday}</span></div><p className="text-[10px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">खोप हाजिरी</p></div>
-                        <div className={`p-2.5 rounded-xl transition-colors ${stats.totalOverdueCount > 0 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'} group-hover:bg-emerald-600 group-hover:text-white`}><CalendarCheck size={18} /></div>
+                        <div>
+                            <div className="flex items-baseline gap-1">
+                                <h3 className="text-2xl font-black text-emerald-600">{stats.dosesGivenToday}</h3>
+                                <span className="text-slate-400 font-bold text-sm">/ {stats.dosesScheduledForToday + stats.dosesOverdue}</span>
+                            </div>
+                            <p className="text-[10px] font-bold text-slate-400 font-nepali uppercase tracking-wider mt-1">खोप हाजिरी (आज / बाँकी)</p>
+                        </div>
+                        <div className={`p-2.5 rounded-xl transition-colors ${stats.dosesOverdue > 0 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'} group-hover:bg-emerald-600 group-hover:text-white`}><CalendarCheck size={18} /></div>
                     </div>
                 </div>
 
@@ -430,14 +439,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
       case 'change_password': return <ChangePassword currentUser={currentUser} users={users} onChangePassword={onChangePassword} />;
       case 'store_setup': return <StoreSetup currentFiscalYear={currentFiscalYear} stores={stores} onAddStore={onAddStore} onUpdateStore={onUpdateStore} onDeleteStore={onDeleteStore} inventoryItems={inventoryItems} onUpdateInventoryItem={onUpdateInventoryItem} />;
       case 'tb_leprosy': return <TBPatientRegistration currentFiscalYear={currentFiscalYear} currentUser={currentUser} patients={tbPatients} onAddPatient={onAddTBPatient} onUpdatePatient={onUpdateTBPatient} onDeletePatient={onDeleteTBPatient} />;
-      case 'rabies': return <RabiesRegistration currentFiscalYear={currentFiscalYear} patients={rabiesPatients} onAddPatient={onAddRabiesPatient} onUpdatePatient={onUpdateRabiesPatient} onDeletePatient={onDeletePatient} currentUser={currentUser} />;
+      case 'rabies': return <RabiesRegistration currentFiscalYear={currentFiscalYear} patients={rabiesPatients} onAddPatient={onAddRabiesPatient} onUpdateRabiesPatient={onUpdateRabiesPatient} onDeletePatient={onDeletePatient} currentUser={currentUser} />;
       case 'form_suchikaran': return <FirmListing currentFiscalYear={currentFiscalYear} firms={firms} onAddFirm={onAddFirm} />;
       case 'quotation': return <Quotation currentFiscalYear={currentFiscalYear} firms={firms} quotations={quotations} onAddQuotation={onAddQuotation} inventoryItems={inventoryItems} />;
       case 'mag_faram': return <MagFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} existingForms={magForms} onSave={onSaveMagForm} inventoryItems={inventoryItems} stores={stores} generalSettings={generalSettings} allUsers={users} issueReports={issueReports} purchaseOrders={purchaseOrders} onSavePurchaseOrder={onUpdatePurchaseOrder} onSaveIssueReport={onUpdateIssueReport} />;
       case 'hafa_faram': return <HafaFaram currentFiscalYear={currentFiscalYear} currentUser={currentUser} existingEntries={hafaEntries} onSave={onSaveHafaEntry} onDelete={onDeleteHafaEntry} inventoryItems={inventoryItems} stores={stores} generalSettings={generalSettings} users={users} />;
       case 'kharid_adesh': return <KharidAdesh orders={purchaseOrders} currentFiscalYear={currentFiscalYear} onSave={onUpdatePurchaseOrder} currentUser={currentUser} firms={firms} quotations={quotations} onDakhilaClick={(po) => setActiveItem('jinshi_maujdat')} generalSettings={generalSettings} />;
       case 'nikasha_pratibedan': return <NikashaPratibedan reports={issueReports} onSave={onUpdateIssueReport} currentUser={currentUser} currentFiscalYear={currentFiscalYear} generalSettings={generalSettings} />;
-      case 'jinshi_maujdat': return <JinshiMaujdat currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} onAddInventoryItem={onAddInventoryItem} onUpdateInventoryItem={onUpdateInventoryItem} stores={stores} onRequestStockEntry={onRequestStockEntry} pendingPoDakhila={pendingPoDakhila} onClearPendingPoDakhila={() => setPendingPoDakhila(null)} />;
+      case 'jinshi_maujdat': return <JinshiMaujdat currentFiscalYear={currentFiscalYear} currentUser={currentUser} inventoryItems={inventoryItems} onAddInventoryItem={onAddInventoryItem} onUpdateInventoryItem={onUpdateInventoryItem} onRequestStockEntry={onRequestStockEntry} stores={stores} pendingPoDakhila={pendingPoDakhila} onClearPendingPoDakhila={() => setPendingPoDakhila(null)} />;
       case 'stock_entry_approval': return <StockEntryApproval requests={stockEntryRequests} currentUser={currentUser} onApprove={onApproveStockEntry} onReject={onRejectStockEntry} stores={stores} />;
       case 'dakhila_pratibedan': return <DakhilaPratibedan dakhilaReports={dakhilaReports} onSaveDakhilaReport={onSaveDakhilaReport} currentFiscalYear={currentFiscalYear} currentUser={currentUser} stockEntryRequests={stockEntryRequests} inventoryItems={inventoryItems} onApproveStockEntry={onApproveStockEntry} onReject={onRejectStockEntry} generalSettings={generalSettings} stores={stores} />;
       case 'jinshi_khata': return <JinshiKhata currentFiscalYear={currentFiscalYear} inventoryItems={inventoryItems} issueReports={issueReports} dakhilaReports={dakhilaReports} stockEntryRequests={stockEntryRequests} returnEntries={returnEntries} generalSettings={generalSettings} />;
@@ -616,7 +625,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <div className="px-6 py-4 border-b bg-emerald-50 flex justify-between items-center text-emerald-800">
                       <div className="flex items-center gap-3">
                           <CalendarCheck size={20} />
-                          <h3 className="font-bold font-nepali">आजको खोप हाजिरी (Vaccination Schedule)</h3>
+                          <h3 className="font-bold font-nepali">आजको खोप हाजिरी (दिइएका: {stats.dosesGivenToday} / बाँकी: {stats.dosesScheduledForToday + stats.dosesOverdue})</h3>
                       </div>
                       <button onClick={() => setShowAttendanceModal(false)} className="p-2 hover:bg-white rounded-full"><X size={20}/></button>
                   </div>
@@ -882,10 +891,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           स्टोरबाट पठाइएको दाखिला अनुरोध स्वीकृत भएको छ। <br/>
                           सामानहरू मौज्दातमा थपिएका छन्।
                       </p>
-                      <div className="mt-6 bg-slate-50 p-4 rounded-xl text-left border border-slate-100">
-                          <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Source Details</p>
-                          <p className="text-sm font-bold text-slate-700">{latestApprovedDakhila.receiptSource}</p>
-                          <p className="text-xs text-slate-500 mt-1">Ref No: {latestApprovedDakhila.refNo}</p>
+                      <div className="mt-6 bg-slate-50 p-4 rounded-xl border border-slate-100 text-left space-y-2">
+                         <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">दाखिला नं. (Entry No): <span className="text-slate-700 font-bold">{latestApprovedDakhila.items[0]?.dakhilaNo || '-'}</span></p>
+                         <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">गोदाम (Store): <span className="text-slate-700 font-bold">{stores.find(s => s.id === latestApprovedDakhila.storeId)?.name || '-'}</span></p>
+                         <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">कुल सामान (Total Items): <span className="text-slate-700 font-bold">{latestApprovedDakhila.items.length}</span></p>
                       </div>
                   </div>
                   <button 
