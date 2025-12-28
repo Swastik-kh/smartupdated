@@ -282,9 +282,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const menuItems = useMemo(() => {
     const isSuperOrAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN';
     const allowedMenus = currentUser.allowedMenus || [];
+    
     const allItems = [
         { id: 'dashboard', label: 'ड्यासबोर्ड (Dashboard)', icon: <LayoutDashboard size={20} /> },
-        { id: 'services', label: 'सेवा (Services)', icon: <Stethoscope size={20} />, subItems: [{ id: 'tb_leprosy', label: 'क्षयरोग (TB)', icon: <Activity size={16} /> }, { id: 'rabies', label: 'रेबिज़ खोप (Rabies)', icon: <Syringe size={16} /> }] },
+        { id: 'services', label: 'सेवा (Services)', icon: <Stethoscope size={20} />, subItems: [
+            { id: 'tb_leprosy', label: 'क्षयरोग (TB)', icon: <Activity size={16} /> }, 
+            { id: 'rabies', label: 'रेबिज़ खोप (Rabies)', icon: <Syringe size={16} /> }
+        ] },
         { id: 'inventory', label: 'जिन्सी (Inventory)', icon: <Package size={20} />, count: inventoryTotalNotifications, subItems: [ 
             { id: 'stock_entry_approval', label: 'स्टक प्रविष्टि', icon: <ClipboardCheck size={16} />, count: pendingDakhilaCount }, 
             { id: 'jinshi_maujdat', label: 'जिन्सी मौज्दात', icon: <Warehouse size={16} /> }, 
@@ -311,15 +315,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
             { id: 'change_password', label: 'पासवर्ड परिवर्तन', icon: <KeyRound size={16} /> }
         ] }
     ];
-    return allItems.filter(item => {
-        if (item.id === 'dashboard') return true;
-        if (isSuperOrAdmin) return true;
-        return allowedMenus.includes(item.id) || (item.subItems && item.subItems.some(sub => allowedMenus.includes(sub.id)));
-    });
+
+    // Filter sub-items and items based on permissions
+    return allItems
+        .map(item => {
+            if (item.subItems) {
+                // For categories with sub-items, filter the sub-items first
+                const filteredSubItems = item.subItems.filter(sub => 
+                    isSuperOrAdmin || allowedMenus.includes(sub.id)
+                );
+                return { ...item, subItems: filteredSubItems };
+            }
+            return item;
+        })
+        .filter(item => {
+            // Dashboard is always visible to everyone
+            if (item.id === 'dashboard') return true;
+            // Admin and Super Admin see everything
+            if (isSuperOrAdmin) return true;
+            // Show item if it is explicitly allowed OR if it has allowed sub-items
+            const isAllowed = allowedMenus.includes(item.id);
+            const hasAllowedChildren = item.subItems && item.subItems.length > 0;
+            return isAllowed || hasAllowedChildren;
+        });
   }, [currentUser, inventoryTotalNotifications, pendingDakhilaCount, pendingMagCount, pendingNikashaCount, pendingHafaCount, pendingReturnCount, pendingMarmatCount]);
 
   const handleMenuClick = (item: any) => {
-    if (item.subItems) setExpandedMenu(expandedMenu === item.id ? null : item.id);
+    if (item.subItems && item.subItems.length > 0) setExpandedMenu(expandedMenu === item.id ? null : item.id);
     else { setActiveItem(item.id); setIsSidebarOpen(false); }
   };
 
@@ -458,10 +480,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           {item.count}
                         </span>
                       )}
-                      {item.subItems && (expandedMenu === item.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
+                      {item.subItems && item.subItems.length > 0 && (expandedMenu === item.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
                     </div>
                   </button>
-                  {item.subItems && expandedMenu === item.id && (
+                  {item.subItems && item.subItems.length > 0 && expandedMenu === item.id && (
                       <div className="mt-1 ml-4 pl-3 border-l border-slate-800 space-y-1">
                           {item.subItems.map((sub: any) => (
                               <button key={sub.id} onClick={() => handleSubItemClick(sub.id)} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-nepali ${activeItem === sub.id ? 'bg-primary-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-200'}`}>
